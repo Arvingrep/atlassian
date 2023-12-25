@@ -1,0 +1,99 @@
+version: '3.4'
+services:
+  jira:
+#    image: haxqer/jira
+    # image: 192.168.5.192/atlassian/jira:v8.7.1
+    image: arvingrep/jira:v8.7.1.202206221126
+    container_name: jira-srv
+    environment:
+      - TZ=Asia/Shanghai
+#      - JVM_MINIMUM_MEMORY=1g
+#      - JVM_MAXIMUM_MEMORY=12g
+#      - JVM_CODE_CACHE_ARGS='-XX:InitialCodeCacheSize=1g -XX:ReservedCodeCacheSize=8g'
+    depends_on:
+      - mysql
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./jira:/var/jira
+     # - jira_data:/var/jira
+    restart: always
+    networks:
+      - network-bridge
+
+  confluence:
+  #  image: haxqer/confluence
+    # image: 192.168.5.192/atlassian/confluence:v6.9.0
+    image:   arvingrep/confluence:v7.4.8
+    container_name: confluence-srv
+    environment:
+      - TZ=Asia/Shanghai
+#      - JVM_MINIMUM_MEMORY=1g
+#      - JVM_MAXIMUM_MEMORY=12g
+#      - JVM_CODE_CACHE_ARGS='-XX:InitialCodeCacheSize=1g -XX:ReservedCodeCacheSize=8g'
+    depends_on:
+      - mysql
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./confluence:/var/confluence
+    restart: always
+    networks:
+      - network-bridge
+
+  bitbucket:
+#    image: haxqer/bitbucket
+    image: arvingrep/bitbucket:v7.8.0
+    container_name: bitbucket-srv
+    environment:
+      - TZ=Asia/Shanghai
+#      - JVM_MINIMUM_MEMORY=1g
+#      - JVM_MAXIMUM_MEMORY=12g
+#      - JVM_CODE_CACHE_ARGS='-XX:InitialCodeCacheSize=1g -XX:ReservedCodeCacheSize=8g'
+    depends_on:
+      - mysql
+    ports:
+      - "7990:7990"
+    volumes:
+      - ./bitbucket:/var/bitbucket
+    restart: always
+    networks:
+      - network-bridge
+
+# information : https://donlalicon.dev/blog/mysql-docker-container-with-multiple-databases/#re-initializing-databases
+  mysql:
+    image: mysql:5.7
+    container_name: mysql-atlassian
+    environment:
+      - TZ=Asia/Shanghai
+      - MYSQL_ROOT_PASSWORD=123456
+      - DATABASE_NAME_SITE_A=confluence
+      - DATABASE_NAME_SITE_B=jira
+      - DATABASE_NAME_SITE_C=bitbucket
+      - DATABASE_USERNAME=atlassian
+      - DATABASE_PASSWORD=123123
+    #command: ['mysqld', '--character-set-server=utf8', '--collation-server=utf8_bin', '--transaction-isolation=READ-COMMITTED', '--innodb_log_file_size=256M', '--max_allowed_packet=256M']
+    command: ['mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_bin','--transaction-isolation=READ-COMMITTED']
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./mysql:/var/lib/mysql
+      - ./docker/db/init:/docker-entrypoint-initdb.d
+    restart: always
+    networks:
+      - network-bridge
+
+networks:
+  network-bridge:
+    driver: bridge
+  
+
+# volumes:
+#   jira_data:
+#     external: false
+#   bitbucket_data:
+#     external: false
+#   confluence_data:
+#     external: false
+#   mysql_data:
+#     external: false
