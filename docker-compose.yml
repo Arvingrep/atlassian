@@ -1,5 +1,17 @@
 version: '3.4'
 services:
+  nginx:
+    image: nginx
+    container_name: nginx-srv
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+      # - ./nginx/ssl:/etc/nginx/ssl   # 新增的 SSL 相关卷
+    ports:
+      - "443:443"
+      - "80:80"
+    restart: always
+    networks:
+      - network-bridge
   jira:
 #    image: haxqer/jira
     # image: 192.168.5.192/atlassian/jira:v8.7.1

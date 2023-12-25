@@ -33,6 +33,7 @@ sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 cd ~
 git clone https://github.com/Arvingrep/atlassian.git \
     && cd atlassian \
-    && sudo  docker-compose up
+    && sudo  docker-compose up -d
+    
 
 
