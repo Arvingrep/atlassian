@@ -10,8 +10,8 @@ services:
       - "443:443"
       - "80:80"
     restart: always
-    networks:
-      - network-bridge
+    network_mode: host  # 将网络模式设置为 host
+    
   jira:
 #    image: haxqer/jira
     # image: 192.168.5.192/atlassian/jira:v8.7.1
@@ -30,8 +30,7 @@ services:
       - ./jira:/var/jira
      # - jira_data:/var/jira
     restart: always
-    networks:
-      - network-bridge
+    network_mode: host  # 将网络模式设置为 host
 
   confluence:
   #  image: haxqer/confluence
@@ -50,8 +49,7 @@ services:
     volumes:
       - ./confluence:/var/confluence
     restart: always
-    networks:
-      - network-bridge
+    network_mode: host  # 将网络模式设置为 host
 
   bitbucket:
 #    image: haxqer/bitbucket
@@ -69,8 +67,7 @@ services:
     volumes:
       - ./bitbucket:/var/bitbucket
     restart: always
-    networks:
-      - network-bridge
+    network_mode: host  # 将网络模式设置为 host
 
 # information : https://donlalicon.dev/blog/mysql-docker-container-with-multiple-databases/#re-initializing-databases
   mysql:
@@ -92,12 +89,11 @@ services:
       - ./mysql:/var/lib/mysql
       - ./docker/db/init:/docker-entrypoint-initdb.d
     restart: always
-    networks:
-      - network-bridge
+    network_mode: host  # 将网络模式设置为 host
 
-networks:
-  network-bridge:
-    driver: bridge
+# networks:
+#   network-bridge:
+#     driver: bridge
   
 
 # volumes:
