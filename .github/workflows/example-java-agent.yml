@@ -1,0 +1,95 @@
+name: Example Java agent
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+    paths:
+      - "example-agent/**"
+      - "docker-compose.agent-demo.yml"
+      - "scripts/check-java-agent.sh"
+      - ".github/workflows/example-java-agent.yml"
+  pull_request:
+    paths:
+      - "example-agent/**"
+      - "docker-compose.agent-demo.yml"
+      - "scripts/check-java-agent.sh"
+      - ".github/workflows/example-java-agent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-agent:
+    name: Test premain behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run agent tests
+        run: |
+          chmod +x example-agent/build.sh example-agent/tests/*.sh scripts/check-java-agent.sh
+          example-agent/tests/test-agent.sh
+          example-agent/tests/test-atlassian-injection.sh
+      - name: Upload example agent JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-agent-jar
+          path: example-agent/build/example-agent.jar
+
+  build-multi-platform:
+    name: Build standalone agent (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            suffix: amd64
+          - platform: linux/arm64
+            suffix: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build multi-platform-compatible demonstration image
+        uses: docker/build-push-action@v6
+        with:
+          context: example-agent
+          file: example-agent/Dockerfile
+          platforms: ${{ matrix.platform }}
+          tags: example-agent:ci-${{ matrix.suffix }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-atlassian-images:
+    name: Build Atlassian demonstration images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Jira image with educational agent
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: example-agent/Dockerfile.jira
+          platforms: linux/amd64
+          tags: local/jira-example-agent:9.6.0
+          push: false
+          cache-from: type=gha,scope=jira-agent
+          cache-to: type=gha,mode=max,scope=jira-agent
+      - name: Build Confluence image with educational agent
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: example-agent/Dockerfile.confluence
+          platforms: linux/amd64
+          tags: local/confluence-example-agent:7.19.7
+          push: false
+          cache-from: type=gha,scope=confluence-agent
+          cache-to: type=gha,mode=max,scope=confluence-agent

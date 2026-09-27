@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Premain-Class: com.sl.devops.agent.ExampleAgent
+Can-Redefine-Classes: false
+Can-Retransform-Classes: false
+Main-Class: com.sl.devops.agent.AgentSmokeMain
+
