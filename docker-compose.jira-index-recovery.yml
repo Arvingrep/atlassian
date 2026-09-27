@@ -1,0 +1,9 @@
+services:
+  jira:
+    # Temporary migration-only workaround: allow UI access while the restored
+    # database has no matching Lucene index. Remove this override after a full
+    # foreground reindex has completed successfully.
+    environment:
+      JVM_SUPPORT_RECOMMENDED_ARGS: >-
+        -javaagent:/var/agent/example-agent.jar=application=jira
+        -Dcom.atlassian.jira.status.index.check=false
