@@ -10,6 +10,7 @@ on:
       - "jira/Dockerfile"
       - "confluence/Dockerfile"
       - "docker-compose.agent-demo.yml"
+      - "docker-compose.ghcr.yml"
       - "scripts/check-java-agent.sh"
       - ".github/workflows/example-java-agent.yml"
   pull_request:
@@ -18,12 +19,18 @@ on:
       - "jira/Dockerfile"
       - "confluence/Dockerfile"
       - "docker-compose.agent-demo.yml"
+      - "docker-compose.ghcr.yml"
       - "scripts/check-java-agent.sh"
       - ".github/workflows/example-java-agent.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: arvingrep
 
 jobs:
   test-agent:
@@ -37,63 +44,76 @@ jobs:
           chmod +x example-agent/build.sh example-agent/tests/*.sh scripts/check-java-agent.sh
           example-agent/tests/test-agent.sh
           example-agent/tests/test-atlassian-injection.sh
+          example-agent/tests/test-local-dockerfiles.sh
       - name: Upload example agent JAR
         uses: actions/upload-artifact@v4
         with:
           name: example-agent-jar
           path: example-agent/build/example-agent.jar
 
-  build-multi-platform:
-    name: Build standalone agent (${{ matrix.platform }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            suffix: amd64
-          - platform: linux/arm64
-            suffix: arm64
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - name: Build multi-platform-compatible demonstration image
-        uses: docker/build-push-action@v6
-        with:
-          context: example-agent
-          file: example-agent/Dockerfile
-          platforms: ${{ matrix.platform }}
-          tags: example-agent:ci-${{ matrix.suffix }}
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-atlassian-images:
-    name: Build Atlassian demonstration images
+  publish-agent-image:
+    name: Build and publish standalone multi-platform image
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - name: Build Jira image with educational agent
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish educational agent image
+        uses: docker/build-push-action@v6
+        with:
+          context: example-agent
+          file: example-agent/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/arvingrep/atlassian-example-agent:latest
+            ghcr.io/arvingrep/atlassian-example-agent:sha-${{ github.sha }}
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha,scope=standalone-agent
+          cache-to: type=gha,mode=max,scope=standalone-agent
+
+  publish-atlassian-images:
+    name: Build and publish Atlassian images
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish Jira image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: jira/Dockerfile
           platforms: linux/amd64
-          tags: local/jira-example-agent:9.6.0
-          push: false
+          tags: |
+            ghcr.io/arvingrep/atlassian-jira:9.6.0-example-agent
+            ghcr.io/arvingrep/atlassian-jira:sha-${{ github.sha }}
+          push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=gha,scope=jira-agent
           cache-to: type=gha,mode=max,scope=jira-agent
-      - name: Build Confluence image with educational agent
+      - name: Build and publish Confluence image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: confluence/Dockerfile
           platforms: linux/amd64
-          tags: local/confluence-example-agent:7.19.7
-          push: false
+          tags: |
+            ghcr.io/arvingrep/atlassian-confluence:7.19.7-example-agent
+            ghcr.io/arvingrep/atlassian-confluence:sha-${{ github.sha }}
+          push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=gha,scope=confluence-agent
           cache-to: type=gha,mode=max,scope=confluence-agent

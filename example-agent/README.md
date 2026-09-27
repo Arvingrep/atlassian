@@ -86,9 +86,22 @@ The `Example Java agent` GitHub workflow:
 
 - tests the JAR and verifies `premain` runs before `main`;
 - uploads the compiled JAR as a workflow artifact;
-- builds the standalone demonstration image for `linux/amd64` and
-  `linux/arm64`; and
-- builds the Jira and Confluence demonstration images for `linux/amd64`.
+- builds and publishes `ghcr.io/arvingrep/atlassian-example-agent:latest`
+  for `linux/amd64` and `linux/arm64`;
+- publishes `ghcr.io/arvingrep/atlassian-jira:9.6.0-example-agent`; and
+- publishes `ghcr.io/arvingrep/atlassian-confluence:7.19.7-example-agent`.
+
+Pull and deploy the published application images with:
+
+```bash
+docker compose --env-file .env.versions \
+  -f docker-compose.migration.yml \
+  -f docker-compose.ghcr.yml \
+  up -d --pull always --no-build
+```
+
+Package publication runs on branch pushes and manual workflow runs. Pull-request
+workflows build and test the images without publishing them.
 
 The old Jira 9.6.0 and Confluence 7.19.7 base images are amd64 images, so their
 derived images cannot honestly be published as native arm64 images. The agent
