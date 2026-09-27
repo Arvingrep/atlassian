@@ -1,108 +1,66 @@
 # Educational Java Agent
 
-This is a minimal, non-transforming Java instrumentation agent. It demonstrates
-how `premain` executes before an application's `main` method, records two system
-properties, and prints basic JVM metadata. It does not modify classes, product
-behavior, or licensing.
+最小化 Java Instrumentation 示例，仅演示 `premain()` 和 JVM 启动参数，不修改应用类或授权逻辑。
 
-## Build and test
-
-No host JDK is required; compilation runs inside `eclipse-temurin:11-jdk`:
+## 构建与测试
 
 ```bash
 example-agent/build.sh
 example-agent/tests/test-agent.sh
 ```
 
-The JAR is created at:
+输出：
 
 ```text
 example-agent/build/example-agent.jar
 ```
 
-Its manifest declares:
+Manifest：
 
 ```text
 Premain-Class: com.sl.devops.agent.ExampleAgent
 ```
 
-## `JAVA_TOOL_OPTIONS` demonstration
-
-The standalone smoke test uses:
+## 独立运行
 
 ```bash
-JAVA_TOOL_OPTIONS=-javaagent:/var/agent/example-agent.jar=environment=smoke
+docker build -t example-agent:local example-agent
+docker run --rm example-agent:local
 ```
 
-The JVM loads `ExampleAgent.premain(...)` before `AgentSmokeMain.main(...)`.
-The agent then exposes:
+独立镜像通过以下参数加载 Agent：
 
 ```text
-example.agent.loaded=true
-example.agent.options=environment=smoke
+JAVA_TOOL_OPTIONS=-javaagent:/var/agent/example-agent.jar=environment=container
 ```
 
-## Jira and Confluence images
+## Jira / Confluence
 
-Build and start the demonstration images with the two Compose files:
-
-```bash
-docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.agent-demo.yml \
-  build jira confluence
-
-docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.agent-demo.yml \
-  up -d
-```
-
-The active local build definitions are `jira/Dockerfile` and
-`confluence/Dockerfile`; the Compose override references those files directly.
-The resulting containers contain:
+应用镜像中的路径：
 
 ```text
 /var/agent/example-agent.jar
 ```
 
-For Atlassian applications, the derived images use
-`JVM_SUPPORT_RECOMMENDED_ARGS` rather than global `JAVA_TOOL_OPTIONS`.
-`JAVA_TOOL_OPTIONS` also affects helper Java processes used by Atlassian startup
-scripts and can corrupt their version/output parsing. The standalone image still
-demonstrates `JAVA_TOOL_OPTIONS`; the application images inject `-javaagent`
-only into the main Tomcat JVM.
+Atlassian 启动脚本会执行辅助 JVM，因此应用镜像使用：
 
-Inspect the effective environment, JVM command line, and JAR:
+```text
+JVM_SUPPORT_RECOMMENDED_ARGS=-javaagent:/var/agent/example-agent.jar=application=...
+```
+
+检查：
 
 ```bash
 scripts/check-java-agent.sh jira-9.6.0
 scripts/check-java-agent.sh confluence-7.19.7
 ```
 
-## Multi-platform CI
+## 镜像
 
-The `Example Java agent` GitHub workflow:
-
-- tests the JAR and verifies `premain` runs before `main`;
-- uploads the compiled JAR as a workflow artifact;
-- builds and publishes `ghcr.io/arvingrep/atlassian-example-agent:latest`
-  for `linux/amd64` and `linux/arm64`;
-- publishes `ghcr.io/arvingrep/atlassian-jira:9.6.0-example-agent`; and
-- publishes `ghcr.io/arvingrep/atlassian-confluence:7.19.7-example-agent`.
-
-Pull and deploy the published application images with:
-
-```bash
-docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.ghcr.yml \
-  up -d --pull always --no-build
+```text
+ghcr.io/arvingrep/atlassian-example-agent:latest
+ghcr.io/arvingrep/atlassian-jira:9.6.0-example-agent
+ghcr.io/arvingrep/atlassian-confluence:7.19.7-example-agent
 ```
 
-Package publication runs on branch pushes and manual workflow runs. Pull-request
-workflows build and test the images without publishing them.
-
-The old Jira 9.6.0 and Confluence 7.19.7 base images are amd64 images, so their
-derived images cannot honestly be published as native arm64 images. The agent
-itself and its standalone Java 11 image are multi-platform.
+独立 Agent 镜像支持 `linux/amd64` 和 `linux/arm64`；旧版 Jira、Confluence 基础镜像仅支持 `linux/amd64`。

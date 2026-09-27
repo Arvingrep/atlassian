@@ -1,148 +1,68 @@
-# Jira 9.6.0 / Confluence 7.19.7 migration lab
+# 迁移说明
 
-This branch adds an isolated migration stack in `docker-compose.migration.yml`:
+## 环境
 
-- Jira Software 9.6.0 (Java 11)
-- Confluence 7.19.7 (Java 11)
-- PostgreSQL 9.2
-- Separate `jira` and `confluence` databases
-- Persistent Docker volumes for both application homes and PostgreSQL
+```text
+Jira 9.6.0
+Confluence 7.19.7
+PostgreSQL 9.2
+```
 
-> PostgreSQL 9.2 is end-of-life and is outside the supported database matrix for
-> these Atlassian releases. This stack is only for reproducing and extracting a
-> legacy installation. Do not expose it to the Internet or use it as the final
-> production target. After validating the restored data, upgrade PostgreSQL to a
-> supported version before cutover.
+PostgreSQL 9.2 仅用于兼容旧数据。完成迁移验证后，应升级到 Atlassian 支持的数据库版本。
 
-## Capacity planning from the source inventory
+## Compose 文件
 
-The supplied inventory shows roughly 51 GB Jira home, 140 GB Confluence home,
-1.2 GB Jira DB and 4.5 GB Confluence DB. Keep at least 250 GB free for the lab;
-350 GB is safer while dumps, attachment copies and temporary indexes coexist.
-The Confluence `backups` directory (about 107 GB) should not be copied into the
-new application home unless a specific historical ZIP is required.
+| 文件 | 用途 |
+|---|---|
+| `docker-compose.migration.yml` | 基础服务、数据卷和 nginx |
+| `docker-compose.ghcr.yml` | 使用 GitHub 发布镜像 |
+| `docker-compose.agent-demo.yml` | 本地构建镜像 |
+| `docker-compose.jira-index-recovery.yml` | Jira 无索引时临时开放 UI |
 
-## Start the empty lab
+## Jira 恢复
 
 ```bash
-export POSTGRES_PASSWORD='replace-with-a-local-only-password'
-docker compose -f docker-compose.migration.yml config
-docker compose -f docker-compose.migration.yml up -d postgres
-docker compose -f docker-compose.migration.yml ps
+scripts/import-jira-migration-package.sh BACKUP.tar.gz --yes
 ```
 
-On Apple Silicon, the compose file deliberately uses `linux/amd64` because the
-legacy PostgreSQL 9.2 image has no native ARM64 build. The same images deploy
-natively on a standard x86_64 Linux Docker server. Copy the repository, install
-Docker Engine with the Compose plugin, set the password, and run the same
-`docker compose --env-file .env.versions -f docker-compose.migration.yml up -d`
-command. Published ports are `80`, `8080`, `8090`, `8091`, and `15432`; restrict
-the direct application/database ports with the Linux firewall when only nginx
-should be reachable.
-
-## Restore database dumps
-
-Put custom-format or plain SQL dumps in `migration/import/`. Examples:
+导入完成后核对：
 
 ```bash
-# Custom pg_dump format
-docker compose -f docker-compose.migration.yml exec -T postgres \
-  pg_restore -U atlassian -d jira --clean --if-exists --no-owner \
-  < migration/import/jira.dump
+docker exec atlassian-pg92 psql -U atlassian -d jira -Atc \
+  'select count(*) from jiraissue;'
 
-docker compose -f docker-compose.migration.yml exec -T postgres \
-  pg_restore -U atlassian -d confluence --clean --if-exists --no-owner \
-  < migration/import/confluence.dump
-
-# Plain SQL alternative
-# docker compose -f docker-compose.migration.yml exec -T postgres \
-#   psql -U atlassian -d jira < migration/import/jira.sql
+docker exec atlassian-pg92 psql -U atlassian -d jira -Atc \
+  'select count(*) from project;'
 ```
 
-If the dump was made by a newer `pg_dump`, restore it with a matching client
-rather than PostgreSQL 9.2's bundled `pg_restore`.
-
-Note: the PostgreSQL 9.2 `pg_dump` inside the container does not accept
-`-d <db>`; pass the database name as a positional argument
-(`pg_dump -U atlassian -Fc -f out.dump jira`).
-
-## Restore application homes
-
-Stop the application containers before copying files. Restore the active Jira
-home and Confluence home, especially attachments and configuration. Exclude
-rebuildable or disposable content such as caches, logs, temporary files,
-Confluence thumbnails/indexes, Jira indexes, and old local backup ZIPs.
-
-The named-volume locations can be inspected with:
+然后执行完整前台索引，最后运行：
 
 ```bash
-docker volume inspect atlassian_jira_home
-docker volume inspect atlassian_confluence_home
+scripts/finalize-jira-migration.sh
 ```
 
-After copying, ensure the container user owns the files. Then start and inspect:
+## Confluence 恢复
 
-```bash
-docker compose -f docker-compose.migration.yml up -d jira confluence
-docker compose -f docker-compose.migration.yml logs -f --tail=200 jira confluence
-```
+1. 停止 Confluence；
+2. 恢复 PostgreSQL dump；
+3. 恢复 Home、附件和插件数据；
+4. 排除旧索引、缓存、日志和临时文件；
+5. 修正文件属主；
+6. 启动并重建搜索索引。
 
-Endpoints:
+## 验收
 
-- Jira: `http://localhost:8080`
-- Confluence: `http://localhost:8090`
-- PostgreSQL (host access): `localhost:15432`
+- `/status` 返回 `RUNNING`；
+- Jira Issue、项目、用户数量与源环境一致；
+- Confluence 空间、页面、附件数量一致；
+- 抽查近期附件；
+- 检查商业插件授权和版本兼容性；
+- 检查 Base URL 与 Application Links；
+- PostgreSQL、Jira Home、Confluence Home 均使用持久卷。
 
-## Validation checklist
+## 注意
 
-- Jira and Confluence versions match the source exactly.
-- Database restore completes without missing roles/extensions.
-- Application startup has no schema-upgrade or unsupported-database blocker.
-- User/project/space counts match the source.
-- Recent Jira attachments and Confluence page attachments open correctly.
-- Installed apps are checked for version compatibility; do not blindly copy
-  plugin caches.
-- Rebuild Jira indexes and Confluence search indexes after the content check.
-- Take a fresh database dump and application-home snapshot before the next
-  PostgreSQL/application upgrade step.
-
-## Learning and testing version upgrades with GitHub Actions
-
-The application versions are kept in `.env.versions`:
-
-```dotenv
-JIRA_VERSION=9.6.0
-CONFLUENCE_VERSION=7.19.7
-ATLASSIAN_JAVA_TAG=jdk11
-```
-
-To study an upgrade, create a new branch, change these values, and open a pull
-request. The `Atlassian upgrade check` workflow will:
-
-1. verify that both official Atlassian image tags exist;
-2. render and validate the migration Compose configuration;
-3. start PostgreSQL 9.2 and wait for its health check;
-4. verify that the `jira` and `confluence` databases were initialized; and
-5. always remove the temporary CI containers and volumes.
-
-You can also run the same check locally:
-
-```bash
-chmod +x scripts/check-upgrade.sh
-scripts/check-upgrade.sh
-```
-
-GitHub's **Actions → Atlassian upgrade check → Run workflow** screen accepts
-temporary Jira, Confluence, and Java-tag inputs. This tests candidate image tags
-without editing the branch. A green workflow only proves image/configuration and
-database-fixture readiness; it does not prove application/plugin/database-version
-compatibility. Complete the migration checklist with restored data before any
-cutover.
-
-## Tear down
-
-```bash
-docker compose -f docker-compose.migration.yml down
-```
-
-Add `-v` only when you intentionally want to delete all restored test data.
+- 不要导入旧 `dbconfig.xml` 或 `confluence.cfg.xml` 中的生产凭据；
+- 不要迁移 Lucene/OSGi 缓存；
+- 不要公开包含许可证、Token 或数据库密码的日志；
+- `down -v` 会删除恢复数据，除非明确重置环境，否则不要使用。

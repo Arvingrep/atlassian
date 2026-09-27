@@ -1,124 +1,123 @@
-# confluence
-default port: 8090
+# Atlassian 本地迁移环境
 
-## Requirement
-- docker-compose: 17.09.0+
+用于恢复和验证旧 Atlassian 环境：
 
-## How to run with docker-compose
+| 组件 | 版本 |
+|---|---|
+| Jira Software | 9.6.0 / JDK 11 |
+| Confluence | 7.19.7 / JDK 11 |
+| PostgreSQL | 9.2 |
+| 入口域名 | `alpha-jira.sl-devops.com` / `confsys.sl-devops.com` |
 
-- start jira, confluence, bitbucket & mysql
+> PostgreSQL 9.2 已停止维护。本环境仅用于迁移和验证，不应作为最终生产环境。
 
-```
-    git clone https://github.com/Arvingrep/dockerfile.git \
-        && cd dockerfile/atlassian \
-        && docker-compose up
-```
-
-- start confluence & mysql daemon
-
-```
-    docker-compose up -d
-```
-
-- default db(mysql5.7) configure:
+## 快速启动
 
 ```bash
-    driver=mysql5.7+
-    host=mysql-confluence
-    port=3306
-    db=confluence
-    user=atlassian
-    passwd=123123
+export POSTGRES_PASSWORD='本地数据库密码'
+
+docker compose --env-file .env.versions \
+  -f docker-compose.migration.yml \
+  -f docker-compose.ghcr.yml \
+  up -d --pull always --no-build
 ```
 
-## How to run with docker
+访问：
 
-- start confluence
+- Jira：`http://alpha-jira.sl-devops.com`
+- Confluence：`http://confsys.sl-devops.com`
 
+本机 DNS：
+
+```text
+192.168.254.101 alpha-jira.sl-devops.com
+192.168.254.101 confsys.sl-devops.com
 ```
-    docker run -p 8090:8090 -v ./confluence:/var/confluence --network confluence-network --name confluence-srv -e TZ='Asia/Shanghai' haxqer/confluence
-```
 
-- config your own db:
+## Jira 数据导入
 
-
-## Educational Java agent check
-
-The migration images include a non-transforming example Java agent. Verify that
-`premain()` runs in an isolated JVM with:
+导入脚本会覆盖当前 Jira 数据库和 Jira Home，不创建测试数据备份：
 
 ```bash
-docker exec confluence-7.19.7 java \
-    -javaagent:/var/agent/example-agent.jar=manual-test \
-    -jar /var/agent/example-agent.jar
+scripts/import-jira-migration-package.sh \
+  /Users/arvin/Downloads/jira-migration-package.tar.gz \
+  --yes
 ```
 
-Inspect the agent attached to the application JVMs:
+脚本会：
+
+1. 校验备份包；
+2. 停止 Jira；
+3. 恢复 Jira Home，排除索引和插件缓存；
+4. 重建并恢复 PostgreSQL 数据库；
+5. 删除旧数据库配置和 dump；
+6. 修正目录权限；
+7. 以索引恢复模式启动 Jira。
+
+恢复后必须登录 Jira 执行：
+
+```text
+Administration → System → Indexing → Full foreground re-index
+```
+
+索引完成后退出恢复模式：
+
+```bash
+scripts/finalize-jira-migration.sh
+```
+
+## 常用命令
+
+```bash
+# 状态
+docker compose --env-file .env.versions \
+  -f docker-compose.migration.yml \
+  -f docker-compose.ghcr.yml ps
+
+# 日志
+docker logs -f --tail=200 jira-9.6.0
+docker logs -f --tail=200 confluence-7.19.7
+
+# 停止并保留数据
+docker compose --env-file .env.versions \
+  -f docker-compose.migration.yml \
+  -f docker-compose.ghcr.yml down
+```
+
+## 镜像
+
+```text
+ghcr.io/arvingrep/atlassian-jira:9.6.0-example-agent
+ghcr.io/arvingrep/atlassian-confluence:7.19.7-example-agent
+ghcr.io/arvingrep/atlassian-example-agent:latest
+```
+
+Jira 和 Confluence 旧版基础镜像仅支持 `linux/amd64`。Apple Silicon 使用 amd64 模拟运行。
+
+## Java Agent 示例
+
+镜像包含无类转换、无授权修改功能的教学 Agent：
+
+```text
+/var/agent/example-agent.jar
+```
+
+检查 JVM 参数：
 
 ```bash
 scripts/check-java-agent.sh jira-9.6.0
 scripts/check-java-agent.sh confluence-7.19.7
 ```
 
-- jira
-```
-docker exec jira-srv java -jar /var/agent/atlassian-agent.jar \
-    -p jira \
-    -m haxqer666@gmail.com \
-    -n haxqer666@gmail.com \
-    -o http://192.168.5.211:8080 \
-    -s BSI7-TE2T-MEXB-1RBM
-```
+详细说明见 `example-agent/README.md`。
 
-- bitbucket
-```
-docker exec bitbucket-srv java -jar /var/agent/atlassian-agent.jar \
-    -p bitbucket \
-    -m haxqer666@gmail.com \
-    -n haxqer666@gmail.com \
-    -o http://192.168.5.211:7990 \
-    -s BGZV-0VWU-Q75F-E4XE
-```
+## CI
 
+GitHub Actions 会：
 
-## How to hack confluence plugin
+- 校验版本和 Compose；
+- 测试 `premain()`；
+- 构建并发布 GHCR 镜像；
+- 验证 PostgreSQL 初始化。
 
-- .eg I want to use BigGantt plugin
-1. Install BigGantt from confluence marketplace.
-2. Find `App Key` of BigGantt is : `eu.softwareplant.biggantt`
-3. Execute :
-
-```
-docker exec confluence-srv java -jar /var/agent/atlassian-agent.jar \
-    -p eu.softwareplant.biggantt \
-    -m haxqer666@gmail.com \
-    -n haxqer666@gmail.com \
-    -o http://website \
-    -s you-server-id-xxxx
-```
-
-4. Paste your license 
-
-## Install docker & docker-compose
-- If you use `debian`, just do it.
-```
-    ./script/debian-install-docker.sh
-    ./script/linux-install-docker-compose.sh
-```
-
-## Set Proxy
-
-path : `~/.docker/config.json`
-
-content : 
-```
-{
-    "proxies": {
-        "default": {
-         "httpProxy": "http://ip:port",
-         "httpsProxy": "http://ip:port"
-        }
-    }
-}
-```
-
+修改版本：编辑 `.env.versions` 后提交分支。
