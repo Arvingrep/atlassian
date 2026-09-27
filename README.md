@@ -106,6 +106,23 @@ scripts/import-jira-migration-package.sh /tmp/jira-migration-package.tar.gz --ye
 Administration → System → Indexing → Full foreground re-index
 ```
 
+也可以用管理员账号通过 REST 触发（无需打开 UI）：
+
+```bash
+curl -k --resolve alpha-jira.sl-devops.com:443:127.0.0.1 \
+  -c /tmp/jc.txt -b /tmp/jc.txt \
+  -d 'os_username=ADMIN&os_password=PASSWORD&login=Log+in' \
+  https://alpha-jira.sl-devops.com/login.jsp
+
+curl -k --resolve alpha-jira.sl-devops.com:443:127.0.0.1 \
+  -b /tmp/jc.txt -H 'Content-Type: application/json' \
+  -H 'X-Atlassian-Token: no-check' \
+  -X POST -d '{"type":"foreground"}' \
+  https://alpha-jira.sl-devops.com/rest/api/2/reindex
+```
+
+返回的 `progressUrl` 可轮询进度；完成后 `/status` 变为 `RUNNING`。
+
 索引完成后退出恢复模式：
 
 ```bash
