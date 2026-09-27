@@ -30,6 +30,13 @@ docker compose --env-file "${VERSIONS_FILE}" \
   -f "${ROOT}/images.ghcr.yml" \
   config >/dev/null
 
+echo 'Validating local-build Compose configuration'
+docker compose --env-file "${VERSIONS_FILE}" \
+  -f "${ROOT}/docker-compose.jira.yml" \
+  -f "${ROOT}/docker-compose.confluence.yml" \
+  -f "${ROOT}/images.local.yml" \
+  config >/dev/null
+
 bash -n \
   "${ROOT}/scripts/check-upgrade.sh" \
   "${ROOT}/scripts/check-java-agent.sh" \

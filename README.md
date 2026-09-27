@@ -17,6 +17,7 @@
 | `docker-compose.jira.yml` | PostgreSQL、Jira、nginx 和数据卷 |
 | `docker-compose.confluence.yml` | Confluence 服务和数据卷 |
 | `images.ghcr.yml` | 使用 GitHub Container Registry 镜像 |
+| `images.local.yml` | 使用本地 Dockerfile 构建镜像 |
 | `docker-compose.jira-index-recovery.yml` | Jira 无索引时临时开放 UI |
 
 ## 启动
@@ -36,6 +37,16 @@ docker compose --env-file .env.versions \
 
 ```bash
 docker exec atlassian-pg92 createdb -U atlassian -O atlassian confluence
+```
+
+本地构建：
+
+```bash
+docker compose --env-file .env.versions \
+  -f docker-compose.jira.yml \
+  -f docker-compose.confluence.yml \
+  -f images.local.yml \
+  up -d --build
 ```
 
 访问：
@@ -116,5 +127,5 @@ docker compose --env-file .env.versions \
 
 - Jira、Confluence、PostgreSQL 镜像标签；
 - GHCR 镜像是否存在；
-- GHCR Compose 配置；
+- GHCR 与本地构建两套 Compose 配置；
 - Shell 脚本语法。
