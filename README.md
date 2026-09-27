@@ -21,7 +21,8 @@
 | 数据库 | `POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_CONTAINER`、`POSTGRES_VOLUME`、`POSTGRES_PORT`、`POSTGRES_MAX_CONNECTIONS`、`JIRA_DB`、`CONFLUENCE_DB` |
 | Jira | `JIRA_CONTAINER`、`JIRA_DOMAIN`、`JIRA_PORT`、`JIRA_HOME_VOLUME`、`JIRA_XMS`、`JIRA_XMX` |
 | Confluence | `CONFLUENCE_CONTAINER`、`CONFLUENCE_DOMAIN`、`CONFLUENCE_PORT`、`CONFLUENCE_SYNCHRONY_PORT`、`CONFLUENCE_HOME_VOLUME`、`CONFLUENCE_XMS`、`CONFLUENCE_XMX` |
-| nginx | `NGINX_CONTAINER`、`HTTP_PORT` |
+| nginx | `NGINX_CONTAINER`、`HTTP_PORT`、`HTTPS_PORT`、`NGINX_TLS_CERT`、`NGINX_TLS_KEY` |
+| 对外协议 | `ATL_PROXY_PORT`、`ATL_TOMCAT_SCHEME` |
 
 ## 文件
 
@@ -64,8 +65,38 @@ docker compose -f docker-compose.confluence.yml -f images.local.yml up -d --buil
 
 访问：
 
-- Jira：`http://alpha-jira.sl-devops.com`
-- Confluence：`http://confsys.sl-devops.com`
+- Jira：`https://alpha-jira.sl-devops.com`
+- Confluence：`https://confsys.sl-devops.com`
+
+`HTTP_PORT` 只做 301 跳转到 HTTPS。
+
+## TLS
+
+nginx 监听 `443`，使用通配符证书：
+
+```text
+CN=*.sl-devops.com
+SAN: *.sl-devops.com, sl-devops.com
+签发：Certum DV TLS G2 R39 CA
+有效期至：2026-12-11
+```
+
+证书来源：
+
+```text
+Documents/devops/argCD/infra-public-deployment/
+  istio-system/gateway/ssl/sl-devops.com/full_chain_rsa.crt
+  istio-system/gateway/ssl/sl-devops.com/sl-devops.com.key
+```
+
+Compose 以只读方式挂载到容器：
+
+```text
+/etc/nginx/certs/tls.crt
+/etc/nginx/certs/tls.key
+```
+
+路径通过 `.env` 的 `NGINX_TLS_CERT`、`NGINX_TLS_KEY` 指定。证书文件不进入 Git 仓库；路径变化时直接改 `.env`。
 
 本机 `/etc/hosts`：
 
@@ -102,8 +133,8 @@ docker compose \
   -f docker-compose.confluence.yml \
   -f images.ghcr.yml ps
 
-curl -H 'Host: alpha-jira.sl-devops.com' http://127.0.0.1/status
-curl -I -H 'Host: confsys.sl-devops.com' http://127.0.0.1/
+curl -k --resolve alpha-jira.sl-devops.com:443:127.0.0.1 https://alpha-jira.sl-devops.com/status
+curl -Ik --resolve confsys.sl-devops.com:443:127.0.0.1 https://confsys.sl-devops.com/
 
 docker logs -f --tail=200 jira-9.6.0
 docker logs -f --tail=200 confluence-7.19.7
