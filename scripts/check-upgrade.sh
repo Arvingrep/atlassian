@@ -2,45 +2,43 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSIONS_FILE=${VERSIONS_FILE:-${ROOT}/.env.versions}
+ENV_FILE=${ENV_FILE:-${ROOT}/.env}
 
 set -a
 # shellcheck disable=SC1090
-source "${VERSIONS_FILE}"
+source "${ENV_FILE}"
 set +a
 
-: "${JIRA_VERSION:?JIRA_VERSION is required}"
-: "${CONFLUENCE_VERSION:?CONFLUENCE_VERSION is required}"
-: "${ATLASSIAN_JAVA_TAG:?ATLASSIAN_JAVA_TAG is required}"
+: "${JIRA_BASE_IMAGE:?JIRA_BASE_IMAGE is required}"
+: "${CONFLUENCE_BASE_IMAGE:?CONFLUENCE_BASE_IMAGE is required}"
+: "${POSTGRES_IMAGE:?POSTGRES_IMAGE is required}"
+: "${JIRA_GHCR_IMAGE:?JIRA_GHCR_IMAGE is required}"
+: "${CONFLUENCE_GHCR_IMAGE:?CONFLUENCE_GHCR_IMAGE is required}"
 
-jira_base="atlassian/jira-software:${JIRA_VERSION}-${ATLASSIAN_JAVA_TAG}"
-confluence_base="atlassian/confluence-server:${CONFLUENCE_VERSION}-${ATLASSIAN_JAVA_TAG}"
-jira_ghcr="ghcr.io/arvingrep/atlassian-jira:${JIRA_VERSION}-example-agent"
-confluence_ghcr="ghcr.io/arvingrep/atlassian-confluence:${CONFLUENCE_VERSION}-example-agent"
-
-for image in "${jira_base}" "${confluence_base}" postgres:9.2 "${jira_ghcr}" "${confluence_ghcr}"; do
+for image in \
+  "${JIRA_BASE_IMAGE}" \
+  "${CONFLUENCE_BASE_IMAGE}" \
+  "${POSTGRES_IMAGE}" \
+  "${JIRA_GHCR_IMAGE}" \
+  "${CONFLUENCE_GHCR_IMAGE}"; do
   echo "Checking ${image}"
   docker manifest inspect "${image}" >/dev/null
 done
 
 echo 'Validating GHCR Compose configuration'
-docker compose --env-file "${VERSIONS_FILE}" \
+docker compose --env-file "${ENV_FILE}" \
   -f "${ROOT}/docker-compose.jira.yml" \
   -f "${ROOT}/docker-compose.confluence.yml" \
   -f "${ROOT}/images.ghcr.yml" \
   config >/dev/null
 
 echo 'Validating local-build Compose configuration'
-docker compose --env-file "${VERSIONS_FILE}" \
+docker compose --env-file "${ENV_FILE}" \
   -f "${ROOT}/docker-compose.jira.yml" \
   -f "${ROOT}/docker-compose.confluence.yml" \
   -f "${ROOT}/images.local.yml" \
   config >/dev/null
 
-bash -n \
-  "${ROOT}/scripts/check-upgrade.sh" \
-  "${ROOT}/scripts/check-java-agent.sh" \
-  "${ROOT}/scripts/import-jira-migration-package.sh" \
-  "${ROOT}/scripts/finalize-jira-migration.sh"
+bash -n "${ROOT}"/scripts/*.sh
 
 echo 'Atlassian configuration checks passed.'

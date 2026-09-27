@@ -1,6 +1,6 @@
 services:
   jira:
-    image: ghcr.io/arvingrep/atlassian-jira:${JIRA_VERSION:-9.6.0}-example-agent
+    image: ${JIRA_GHCR_IMAGE}
 
   confluence:
-    image: ghcr.io/arvingrep/atlassian-confluence:${CONFLUENCE_VERSION:-7.19.7}-example-agent
+    image: ${CONFLUENCE_GHCR_IMAGE}

@@ -6,7 +6,7 @@ on:
       - main
       - "feat/**"
     paths:
-      - ".env.versions"
+      - ".env"
       - "docker-compose*.yml"
       - "images.*.yml"
       - "jira/Dockerfile"
@@ -15,7 +15,7 @@ on:
       - ".github/workflows/atlassian-ci.yml"
   pull_request:
     paths:
-      - ".env.versions"
+      - ".env"
       - "docker-compose*.yml"
       - "images.*.yml"
       - "jira/Dockerfile"
@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select versions
+      - name: Select environment file
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -60,11 +60,21 @@ jobs:
           JAVA_INPUT: ${{ inputs.java_tag }}
         run: |
           if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
-            printf 'JIRA_VERSION=%s\nCONFLUENCE_VERSION=%s\nATLASSIAN_JAVA_TAG=%s\nATLASSIAN_PLATFORM=linux/amd64\n' \
-              "$JIRA_INPUT" "$CONFLUENCE_INPUT" "$JAVA_INPUT" > .env.ci-versions
-            echo "VERSIONS_FILE=$GITHUB_WORKSPACE/.env.ci-versions" >> "$GITHUB_ENV"
+            cp .env .env.ci
+            sed -i \
+              -e "s#^\(JIRA_VERSION=\).*#\1${JIRA_INPUT}#" \
+              -e "s#^\(JIRA_BASE_IMAGE=atlassian/jira-software:\)[^-]*#\1${JIRA_INPUT}#" \
+              -e "s#^\(JIRA_GHCR_IMAGE=ghcr.io/arvingrep/atlassian-jira:\)[^-]*#\1${JIRA_INPUT}#" \
+              -e "s#^\(JIRA_LOCAL_IMAGE=local/atlassian-jira:\)[^-]*#\1${JIRA_INPUT}#" \
+              -e "s#^\(CONFLUENCE_VERSION=\).*#\1${CONFLUENCE_INPUT}#" \
+              -e "s#^\(CONFLUENCE_BASE_IMAGE=atlassian/confluence-server:\)[^-]*#\1${CONFLUENCE_INPUT}#" \
+              -e "s#^\(CONFLUENCE_GHCR_IMAGE=ghcr.io/arvingrep/atlassian-confluence:\)[^-]*#\1${CONFLUENCE_INPUT}#" \
+              -e "s#^\(CONFLUENCE_LOCAL_IMAGE=local/atlassian-confluence:\)[^-]*#\1${CONFLUENCE_INPUT}#" \
+              -e "s#^\(ATLASSIAN_JAVA_TAG=\).*#\1${JAVA_INPUT}#" \
+              .env.ci
+            echo "ENV_FILE=$GITHUB_WORKSPACE/.env.ci" >> "$GITHUB_ENV"
           else
-            echo "VERSIONS_FILE=$GITHUB_WORKSPACE/.env.versions" >> "$GITHUB_ENV"
+            echo "ENV_FILE=$GITHUB_WORKSPACE/.env" >> "$GITHUB_ENV"
           fi
 
       - name: Validate images, Compose and scripts

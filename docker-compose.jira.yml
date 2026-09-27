@@ -1,66 +1,65 @@
 services:
   nginx:
-    image: nginx:1.25
-    container_name: atlassian-nginx
+    image: ${NGINX_IMAGE}
+    container_name: ${NGINX_CONTAINER}
     depends_on:
       - jira
     ports:
-      - "80:80"
+      - "${HTTP_PORT}:80"
     volumes:
       - ./nginx/migration:/etc/nginx/conf.d:ro
     restart: unless-stopped
 
   postgres:
-    image: postgres:9.2
-    # PostgreSQL 9.2 is amd64-only; override ATLASSIAN_PLATFORM if needed.
-    platform: ${ATLASSIAN_PLATFORM:-linux/amd64}
-    container_name: atlassian-pg92
+    image: ${POSTGRES_IMAGE}
+    platform: ${ATLASSIAN_PLATFORM}
+    container_name: ${POSTGRES_CONTAINER}
     environment:
-      POSTGRES_USER: atlassian
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
-      POSTGRES_DB: jira
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${JIRA_DB}
     command:
       - postgres
       - -c
-      - max_connections=200
+      - max_connections=${POSTGRES_MAX_CONNECTIONS}
     ports:
-      - "15432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - pg92_data:/var/lib/postgresql/data
     healthcheck:
-      # PostgreSQL 9.2 predates pg_isready; use psql as the readiness probe.
-      test: ["CMD-SHELL", "psql -U atlassian -d postgres -c 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "psql -U ${POSTGRES_USER} -d postgres -c 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 30
     restart: unless-stopped
 
   jira:
-    image: atlassian/jira-software:${JIRA_VERSION:-9.6.0}-${ATLASSIAN_JAVA_TAG:-jdk11}
-    platform: ${ATLASSIAN_PLATFORM:-linux/amd64}
-    container_name: jira-${JIRA_VERSION:-9.6.0}
+    image: ${JIRA_BASE_IMAGE}
+    platform: ${ATLASSIAN_PLATFORM}
+    container_name: ${JIRA_CONTAINER}
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      TZ: Asia/Shanghai
-      JVM_MINIMUM_MEMORY: ${JIRA_XMS:-2g}
-      JVM_MAXIMUM_MEMORY: ${JIRA_XMX:-6g}
-      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/jira
-      ATL_JDBC_USER: atlassian
-      ATL_JDBC_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
+      TZ: ${TZ}
+      JVM_MINIMUM_MEMORY: ${JIRA_XMS}
+      JVM_MAXIMUM_MEMORY: ${JIRA_XMX}
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/${JIRA_DB}
+      ATL_JDBC_USER: ${POSTGRES_USER}
+      ATL_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
       ATL_DB_DRIVER: org.postgresql.Driver
       ATL_DB_TYPE: postgres72
-      ATL_PROXY_NAME: alpha-jira.sl-devops.com
-      ATL_PROXY_PORT: "80"
+      ATL_PROXY_NAME: ${JIRA_DOMAIN}
+      ATL_PROXY_PORT: "${HTTP_PORT}"
       ATL_TOMCAT_SCHEME: http
     ports:
-      - "8080:8080"
+      - "${JIRA_PORT}:8080"
     volumes:
       - jira_home:/var/atlassian/application-data/jira
     restart: unless-stopped
 
-
 volumes:
   pg92_data:
+    name: ${POSTGRES_VOLUME}
   jira_home:
+    name: ${JIRA_HOME_VOLUME}

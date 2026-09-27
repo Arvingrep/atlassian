@@ -1,16 +1,16 @@
 services:
   jira:
-    image: local/atlassian-jira:${JIRA_VERSION:-9.6.0}
+    image: ${JIRA_LOCAL_IMAGE}
     build:
       context: .
       dockerfile: jira/Dockerfile
       args:
-        BASE_IMAGE: atlassian/jira-software:${JIRA_VERSION:-9.6.0}-${ATLASSIAN_JAVA_TAG:-jdk11}
+        BASE_IMAGE: ${JIRA_BASE_IMAGE}
 
   confluence:
-    image: local/atlassian-confluence:${CONFLUENCE_VERSION:-7.19.7}
+    image: ${CONFLUENCE_LOCAL_IMAGE}
     build:
       context: .
       dockerfile: confluence/Dockerfile
       args:
-        BASE_IMAGE: atlassian/confluence-server:${CONFLUENCE_VERSION:-7.19.7}-${ATLASSIAN_JAVA_TAG:-jdk11}
+        BASE_IMAGE: ${CONFLUENCE_BASE_IMAGE}
