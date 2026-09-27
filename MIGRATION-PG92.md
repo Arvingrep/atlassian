@@ -56,6 +56,10 @@ docker compose -f docker-compose.migration.yml exec -T postgres \
 If the dump was made by a newer `pg_dump`, restore it with a matching client
 rather than PostgreSQL 9.2's bundled `pg_restore`.
 
+Note: the PostgreSQL 9.2 `pg_dump` inside the container does not accept
+`-d <db>`; pass the database name as a positional argument
+(`pg_dump -U atlassian -Fc -f out.dump jira`).
+
 ## Restore application homes
 
 Stop the application containers before copying files. Restore the active Jira
