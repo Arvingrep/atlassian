@@ -13,7 +13,8 @@ services:
 
   postgres:
     image: postgres:9.2
-    platform: linux/amd64
+    # PostgreSQL 9.2 is amd64-only; override ATLASSIAN_PLATFORM if needed.
+    platform: ${ATLASSIAN_PLATFORM:-linux/amd64}
     container_name: atlassian-pg92
     environment:
       POSTGRES_USER: atlassian
@@ -37,9 +38,9 @@ services:
     restart: unless-stopped
 
   jira:
-    image: atlassian/jira-software:9.6.0-jdk11
-    platform: linux/amd64
-    container_name: jira-9.6.0
+    image: atlassian/jira-software:${JIRA_VERSION:-9.6.0}-${ATLASSIAN_JAVA_TAG:-jdk11}
+    platform: ${ATLASSIAN_PLATFORM:-linux/amd64}
+    container_name: jira-${JIRA_VERSION:-9.6.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,9 +64,9 @@ services:
     restart: unless-stopped
 
   confluence:
-    image: atlassian/confluence-server:7.19.7-jdk11
-    platform: linux/amd64
-    container_name: confluence-7.19.7
+    image: atlassian/confluence-server:${CONFLUENCE_VERSION:-7.19.7}-${ATLASSIAN_JAVA_TAG:-jdk11}
+    platform: ${ATLASSIAN_PLATFORM:-linux/amd64}
+    container_name: confluence-${CONFLUENCE_VERSION:-7.19.7}
     depends_on:
       postgres:
         condition: service_healthy

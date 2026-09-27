@@ -32,7 +32,13 @@ docker compose -f docker-compose.migration.yml ps
 ```
 
 On Apple Silicon, the compose file deliberately uses `linux/amd64` because the
-legacy PostgreSQL 9.2 image has no native ARM64 build.
+legacy PostgreSQL 9.2 image has no native ARM64 build. The same images deploy
+natively on a standard x86_64 Linux Docker server. Copy the repository, install
+Docker Engine with the Compose plugin, set the password, and run the same
+`docker compose --env-file .env.versions -f docker-compose.migration.yml up -d`
+command. Published ports are `80`, `8080`, `8090`, `8091`, and `15432`; restrict
+the direct application/database ports with the Linux firewall when only nginx
+should be reachable.
 
 ## Restore database dumps
 
@@ -99,6 +105,39 @@ Endpoints:
 - Rebuild Jira indexes and Confluence search indexes after the content check.
 - Take a fresh database dump and application-home snapshot before the next
   PostgreSQL/application upgrade step.
+
+## Learning and testing version upgrades with GitHub Actions
+
+The application versions are kept in `.env.versions`:
+
+```dotenv
+JIRA_VERSION=9.6.0
+CONFLUENCE_VERSION=7.19.7
+ATLASSIAN_JAVA_TAG=jdk11
+```
+
+To study an upgrade, create a new branch, change these values, and open a pull
+request. The `Atlassian upgrade check` workflow will:
+
+1. verify that both official Atlassian image tags exist;
+2. render and validate the migration Compose configuration;
+3. start PostgreSQL 9.2 and wait for its health check;
+4. verify that the `jira` and `confluence` databases were initialized; and
+5. always remove the temporary CI containers and volumes.
+
+You can also run the same check locally:
+
+```bash
+chmod +x scripts/check-upgrade.sh
+scripts/check-upgrade.sh
+```
+
+GitHub's **Actions → Atlassian upgrade check → Run workflow** screen accepts
+temporary Jira, Confluence, and Java-tag inputs. This tests candidate image tags
+without editing the branch. A green workflow only proves image/configuration and
+database-fixture readiness; it does not prove application/plugin/database-version
+compatibility. Complete the migration checklist with restored data before any
+cutover.
 
 ## Tear down
 
