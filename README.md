@@ -81,13 +81,6 @@ SAN: *.sl-devops.com, sl-devops.com
 有效期至：2026-12-11
 ```
 
-证书来源：
-
-```text
-Documents/devops/argCD/infra-public-deployment/
-  istio-system/gateway/ssl/sl-devops.com/full_chain_rsa.crt
-  istio-system/gateway/ssl/sl-devops.com/sl-devops.com.key
-```
 
 Compose 以只读方式挂载到容器：
 
@@ -98,12 +91,6 @@ Compose 以只读方式挂载到容器：
 
 路径通过 `.env` 的 `NGINX_TLS_CERT`、`NGINX_TLS_KEY` 指定。证书文件不进入 Git 仓库；路径变化时直接改 `.env`。
 
-本机 `/etc/hosts`：
-
-```text
-192.168.254.101 alpha-jira.sl-devops.com
-192.168.254.101 confsys.sl-devops.com
-```
 
 ## Jira 备份导入
 
@@ -157,9 +144,23 @@ com.atlassian.oauth.consumer.ConsumerService:host.__HOST_SERVICE__
 applinks.admin.<id>.display.url / .rpc.url
 ```
 
-## 许可证
 
-Jira 与 Confluence 的镜像均为官方原版，不含许可证。恢复的自带许可证若无法通过校验，应用会返回 500 或进入不可用状态，此时需要在管理界面录入有效许可证（正式或官方试用）后才能继续验收。
+## 用户目录与登录
+
+源环境的 Confluence 用户由 **Jira 内嵌 Crowd** 提供（目录 `Jira Server`，`crowd.server.url` 原为 `http://10.146.40.69:8667`）。迁移后该地址不可达，因此 Crowd 目录里的账号（426 个，含 `corwin`）无法认证，登录会被拒。
+
+两种处理方式：
+
+1. 长期方案：把该目录的 `crowd.server.url` 指向迁移后的 Jira，并确认应用 `Conf70UserGroup` 的远程地址白名单包含 Confluence 容器网段，再验证 Crowd REST。
+2. 临时方案：在 Confluence 内部目录建立同名本地账号（复用同一 PKCS5S2 凭据哈希），使该用户可以登录；Crowd 恢复后删除本地账号。
+
+临时账号的清理 SQL：
+
+```sql
+DELETE FROM cwd_membership m USING cwd_user u
+  WHERE m.child_user_id = u.id AND u.directory_id = 360449 AND u.lower_user_name = 'corwin';
+DELETE FROM cwd_user WHERE directory_id = 360449 AND lower_user_name = 'corwin';
+```
 
 ## 验收
 
