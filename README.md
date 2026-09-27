@@ -42,16 +42,22 @@ default port: 8090
 - config your own db:
 
 
-## How to hack confluence, jira, bitbucket 
+## Educational Java agent check
 
-- confluence
+The migration images include a non-transforming example Java agent. Verify that
+`premain()` runs in an isolated JVM with:
+
+```bash
+docker exec confluence-7.19.7 java \
+    -javaagent:/var/agent/example-agent.jar=manual-test \
+    -jar /var/agent/example-agent.jar
 ```
-docker exec confluence-7.19.7 java -jar /var/agent/example-agent.jar \
-    -p conf \
-    -m haxqer666@gmail.com \
-    -n haxqer666@gmail.com \
-    -o http://alpha-jira.sl-devops.com \
-    -s B9H0-RURR-7HFB-Q2JU
+
+Inspect the agent attached to the application JVMs:
+
+```bash
+scripts/check-java-agent.sh jira-9.6.0
+scripts/check-java-agent.sh confluence-7.19.7
 ```
 
 - jira
