@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:9.2
+    platform: linux/amd64
+    container_name: atlassian-pg92
+    environment:
+      POSTGRES_USER: atlassian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+    ports:
+      - "15432:5432"
+    volumes:
+      - pg92_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./migration/import:/migration/import:ro
+    healthcheck:
+      # PostgreSQL 9.2 predates pg_isready; use psql as the readiness probe.
+      test: ["CMD-SHELL", "psql -U atlassian -d postgres -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  jira:
+    image: atlassian/jira-software:9.6.0-jdk11
+    platform: linux/amd64
+    container_name: jira-9.6.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      JVM_MINIMUM_MEMORY: ${JIRA_XMS:-2g}
+      JVM_MAXIMUM_MEMORY: ${JIRA_XMX:-6g}
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/jira
+      ATL_JDBC_USER: atlassian
+      ATL_JDBC_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
+      ATL_DB_DRIVER: org.postgresql.Driver
+      ATL_DB_TYPE: postgres72
+    ports:
+      - "8080:8080"
+    volumes:
+      - jira_home:/var/atlassian/application-data/jira
+      - ./migration/jira-import:/migration/import:ro
+    restart: unless-stopped
+
+  confluence:
+    image: atlassian/confluence-server:7.19.7-jdk11
+    platform: linux/amd64
+    container_name: confluence-7.19.7
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      JVM_MINIMUM_MEMORY: ${CONFLUENCE_XMS:-2g}
+      JVM_MAXIMUM_MEMORY: ${CONFLUENCE_XMX:-6g}
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/confluence
+      ATL_JDBC_USER: atlassian
+      ATL_JDBC_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
+      ATL_DB_TYPE: postgresql
+    ports:
+      - "8090:8090"
+      - "8091:8091"
+    volumes:
+      - confluence_home:/var/atlassian/application-data/confluence
+      - ./migration/confluence-import:/migration/import:ro
+    restart: unless-stopped
+
+volumes:
+  pg92_data:
+  jira_home:
+  confluence_home:

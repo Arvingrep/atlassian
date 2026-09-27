@@ -1,0 +1,2 @@
+CREATE DATABASE jira OWNER atlassian ENCODING 'UTF8' TEMPLATE template0;
+CREATE DATABASE confluence OWNER atlassian ENCODING 'UTF8' TEMPLATE template0;
