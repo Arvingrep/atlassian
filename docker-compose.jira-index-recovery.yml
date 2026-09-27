@@ -5,5 +5,4 @@ services:
     # foreground reindex has completed successfully.
     environment:
       JVM_SUPPORT_RECOMMENDED_ARGS: >-
-        -javaagent:/var/agent/example-agent.jar=application=jira
         -Dcom.atlassian.jira.status.index.check=false

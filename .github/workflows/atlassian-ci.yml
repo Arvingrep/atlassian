@@ -1,0 +1,71 @@
+name: Atlassian CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+    paths:
+      - ".env.versions"
+      - "docker-compose*.yml"
+      - "images.*.yml"
+      - "jira/Dockerfile"
+      - "confluence/Dockerfile"
+      - "scripts/**"
+      - ".github/workflows/atlassian-ci.yml"
+  pull_request:
+    paths:
+      - ".env.versions"
+      - "docker-compose*.yml"
+      - "images.*.yml"
+      - "jira/Dockerfile"
+      - "confluence/Dockerfile"
+      - "scripts/**"
+      - ".github/workflows/atlassian-ci.yml"
+  workflow_dispatch:
+    inputs:
+      jira_version:
+        description: Jira Software version
+        required: true
+        default: "9.6.0"
+      confluence_version:
+        description: Confluence version
+        required: true
+        default: "7.19.7"
+      java_tag:
+        description: Atlassian image Java suffix
+        required: true
+        default: "jdk11"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlassian-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select versions
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          JIRA_INPUT: ${{ inputs.jira_version }}
+          CONFLUENCE_INPUT: ${{ inputs.confluence_version }}
+          JAVA_INPUT: ${{ inputs.java_tag }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            printf 'JIRA_VERSION=%s\nCONFLUENCE_VERSION=%s\nATLASSIAN_JAVA_TAG=%s\nATLASSIAN_PLATFORM=linux/amd64\n' \
+              "$JIRA_INPUT" "$CONFLUENCE_INPUT" "$JAVA_INPUT" > .env.ci-versions
+            echo "VERSIONS_FILE=$GITHUB_WORKSPACE/.env.ci-versions" >> "$GITHUB_ENV"
+          else
+            echo "VERSIONS_FILE=$GITHUB_WORKSPACE/.env.versions" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate images, Compose and scripts
+        run: scripts/check-upgrade.sh

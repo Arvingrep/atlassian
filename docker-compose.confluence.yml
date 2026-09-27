@@ -3,7 +3,6 @@ services:
     image: nginx:1.25
     container_name: atlassian-nginx
     depends_on:
-      - jira
       - confluence
     ports:
       - "80:80"
@@ -19,6 +18,7 @@ services:
     environment:
       POSTGRES_USER: atlassian
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
+      POSTGRES_DB: jira
     command:
       - postgres
       - -c
@@ -27,40 +27,12 @@ services:
       - "15432:5432"
     volumes:
       - pg92_data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
-      - ./migration/import:/migration/import:ro
     healthcheck:
       # PostgreSQL 9.2 predates pg_isready; use psql as the readiness probe.
       test: ["CMD-SHELL", "psql -U atlassian -d postgres -c 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 30
-    restart: unless-stopped
-
-  jira:
-    image: atlassian/jira-software:${JIRA_VERSION:-9.6.0}-${ATLASSIAN_JAVA_TAG:-jdk11}
-    platform: ${ATLASSIAN_PLATFORM:-linux/amd64}
-    container_name: jira-${JIRA_VERSION:-9.6.0}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      TZ: Asia/Shanghai
-      JVM_MINIMUM_MEMORY: ${JIRA_XMS:-2g}
-      JVM_MAXIMUM_MEMORY: ${JIRA_XMX:-6g}
-      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/jira
-      ATL_JDBC_USER: atlassian
-      ATL_JDBC_PASSWORD: ${POSTGRES_PASSWORD:-atlassian-migration-only}
-      ATL_DB_DRIVER: org.postgresql.Driver
-      ATL_DB_TYPE: postgres72
-      ATL_PROXY_NAME: alpha-jira.sl-devops.com
-      ATL_PROXY_PORT: "80"
-      ATL_TOMCAT_SCHEME: http
-    ports:
-      - "8080:8080"
-    volumes:
-      - jira_home:/var/atlassian/application-data/jira
-      - ./migration/jira-import:/migration/import:ro
     restart: unless-stopped
 
   confluence:
@@ -86,10 +58,8 @@ services:
       - "8091:8091"
     volumes:
       - confluence_home:/var/atlassian/application-data/confluence
-      - ./migration/confluence-import:/migration/import:ro
     restart: unless-stopped
 
 volumes:
-  pg92_data:
-  jira_home:
   confluence_home:
+  pg92_data:

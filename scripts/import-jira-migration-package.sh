@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ARCHIVE=${1:-/Users/arvin/Downloads/jira-migration-package.tar.gz}
 CONFIRM=${2:-}
-BASE=(-f "${ROOT}/docker-compose.migration.yml" -f "${ROOT}/docker-compose.ghcr.yml")
+BASE=(-f "${ROOT}/docker-compose.jira.yml" -f "${ROOT}/docker-compose.confluence.yml" -f "${ROOT}/images.ghcr.yml")
 RECOVERY=(-f "${ROOT}/docker-compose.jira-index-recovery.yml")
 
 usage() {

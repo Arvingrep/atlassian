@@ -13,13 +13,15 @@ if ! echo "${status_json}" | grep -q 'RUNNING'; then
 fi
 
 docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.ghcr.yml \
+  -f docker-compose.jira.yml \
+  -f docker-compose.confluence.yml \
+  -f images.ghcr.yml \
   up -d --no-build --force-recreate jira
 
 docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.ghcr.yml \
+  -f docker-compose.jira.yml \
+  -f docker-compose.confluence.yml \
+  -f images.ghcr.yml \
   restart nginx
 
 echo 'Recovery-mode JVM property removed. Recheck /status after Jira finishes restarting.'

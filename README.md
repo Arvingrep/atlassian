@@ -1,25 +1,41 @@
-# Atlassian 本地迁移环境
+# Atlassian 迁移环境
 
-用于恢复和验证旧 Atlassian 环境：
+用于恢复和验证旧 Atlassian 数据。
 
 | 组件 | 版本 |
 |---|---|
 | Jira Software | 9.6.0 / JDK 11 |
 | Confluence | 7.19.7 / JDK 11 |
 | PostgreSQL | 9.2 |
-| 入口域名 | `alpha-jira.sl-devops.com` / `confsys.sl-devops.com` |
 
-> PostgreSQL 9.2 已停止维护。本环境仅用于迁移和验证，不应作为最终生产环境。
+> PostgreSQL 9.2 已停止维护。本环境仅用于迁移验证，后续应升级到受支持版本。
 
-## 快速启动
+## 文件
+
+| 文件 | 用途 |
+|---|---|
+| `docker-compose.jira.yml` | PostgreSQL、Jira、nginx 和数据卷 |
+| `docker-compose.confluence.yml` | Confluence 服务和数据卷 |
+| `images.ghcr.yml` | 使用 GitHub Container Registry 镜像 |
+| `docker-compose.jira-index-recovery.yml` | Jira 无索引时临时开放 UI |
+
+## 启动
 
 ```bash
 export POSTGRES_PASSWORD='本地数据库密码'
 
+# 使用 GHCR 镜像
 docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.ghcr.yml \
+  -f docker-compose.jira.yml \
+  -f docker-compose.confluence.yml \
+  -f images.ghcr.yml \
   up -d --pull always --no-build
+```
+
+全新 PostgreSQL 数据卷首次启动时，`jira` 数据库会自动创建；启动 Confluence 前创建一次数据库：
+
+```bash
+docker exec atlassian-pg92 createdb -U atlassian -O atlassian confluence
 ```
 
 访问：
@@ -27,16 +43,16 @@ docker compose --env-file .env.versions \
 - Jira：`http://alpha-jira.sl-devops.com`
 - Confluence：`http://confsys.sl-devops.com`
 
-本机 DNS：
+本机 `/etc/hosts`：
 
 ```text
 192.168.254.101 alpha-jira.sl-devops.com
 192.168.254.101 confsys.sl-devops.com
 ```
 
-## Jira 数据导入
+## Jira 备份导入
 
-导入脚本会覆盖当前 Jira 数据库和 Jira Home，不创建测试数据备份：
+该脚本会直接覆盖当前 Jira 数据库和 Jira Home，不创建测试环境备份：
 
 ```bash
 scripts/import-jira-migration-package.sh \
@@ -44,17 +60,7 @@ scripts/import-jira-migration-package.sh \
   --yes
 ```
 
-脚本会：
-
-1. 校验备份包；
-2. 停止 Jira；
-3. 恢复 Jira Home，排除索引和插件缓存；
-4. 重建并恢复 PostgreSQL 数据库；
-5. 删除旧数据库配置和 dump；
-6. 修正目录权限；
-7. 以索引恢复模式启动 Jira。
-
-恢复后必须登录 Jira 执行：
+导入完成后执行：
 
 ```text
 Administration → System → Indexing → Full foreground re-index
@@ -66,58 +72,49 @@ Administration → System → Indexing → Full foreground re-index
 scripts/finalize-jira-migration.sh
 ```
 
-## 常用命令
+## 验收
 
 ```bash
-# 状态
+# 容器
 docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.ghcr.yml ps
+  -f docker-compose.jira.yml \
+  -f docker-compose.confluence.yml \
+  -f images.ghcr.yml ps
+
+# 状态
+curl -H 'Host: alpha-jira.sl-devops.com' http://127.0.0.1/status
+curl -I -H 'Host: confsys.sl-devops.com' http://127.0.0.1/
 
 # 日志
 docker logs -f --tail=200 jira-9.6.0
 docker logs -f --tail=200 confluence-7.19.7
-
-# 停止并保留数据
-docker compose --env-file .env.versions \
-  -f docker-compose.migration.yml \
-  -f docker-compose.ghcr.yml down
 ```
 
-## 镜像
+验收内容：
 
-```text
-ghcr.io/arvingrep/atlassian-jira:9.6.0-example-agent
-ghcr.io/arvingrep/atlassian-confluence:7.19.7-example-agent
-ghcr.io/arvingrep/atlassian-example-agent:latest
-```
+- Jira `/status` 返回 `RUNNING`；
+- Issue、项目、用户、空间和页面数量与源环境一致；
+- 抽查附件；
+- 检查插件版本与授权；
+- 检查 Base URL 和 Application Links；
+- 完成 Jira 与 Confluence 索引重建。
 
-Jira 和 Confluence 旧版基础镜像仅支持 `linux/amd64`。Apple Silicon 使用 amd64 模拟运行。
-
-## Java Agent 示例
-
-镜像包含无类转换、无授权修改功能的教学 Agent：
-
-```text
-/var/agent/example-agent.jar
-```
-
-检查 JVM 参数：
+## 停止
 
 ```bash
-scripts/check-java-agent.sh jira-9.6.0
-scripts/check-java-agent.sh confluence-7.19.7
+docker compose --env-file .env.versions \
+  -f docker-compose.jira.yml \
+  -f docker-compose.confluence.yml \
+  -f images.ghcr.yml down
 ```
 
-详细说明见 `example-agent/README.md`。
+不要使用 `down -v`，除非明确要删除全部迁移数据。
 
 ## CI
 
-GitHub Actions 会：
+修改 `.env.versions`、Compose、Dockerfile 或镜像配置后，GitHub Actions 会检查：
 
-- 校验版本和 Compose；
-- 测试 `premain()`；
-- 构建并发布 GHCR 镜像；
-- 验证 PostgreSQL 初始化。
-
-修改版本：编辑 `.env.versions` 后提交分支。
+- Jira、Confluence、PostgreSQL 镜像标签；
+- GHCR 镜像是否存在；
+- GHCR Compose 配置；
+- Shell 脚本语法。
