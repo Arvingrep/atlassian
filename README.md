@@ -46,12 +46,12 @@ default port: 8090
 
 - confluence
 ```
-docker exec confluence-srv java -jar /var/agent/atlassian-agent.jar \
+docker exec confluence-7.19.7 java -jar /var/agent/example-agent.jar \
     -p conf \
     -m haxqer666@gmail.com \
     -n haxqer666@gmail.com \
-    -o http://192.168.5.211:8090 \
-    -s BUXL-6SIG-Y0V9-FNOC
+    -o http://alpha-jira.sl-devops.com \
+    -s B9H0-RURR-7HFB-Q2JU
 ```
 
 - jira

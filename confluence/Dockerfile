@@ -13,6 +13,7 @@ LABEL org.opencontainers.image.title="Confluence with educational Java premain a
       org.opencontainers.image.description="Confluence with a non-transforming Java instrumentation example"
 USER root
 RUN mkdir -p /var/agent
+#COPY --from=agent-build /workspace/build/example-agent.jar /var/agent/example-agent.jar
 COPY --from=agent-build /workspace/build/example-agent.jar /var/agent/example-agent.jar
 RUN chown -R confluence:confluence /var/agent
 ENV JVM_SUPPORT_RECOMMENDED_ARGS="-javaagent:/var/agent/example-agent.jar=application=confluence"

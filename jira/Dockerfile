@@ -13,7 +13,8 @@ LABEL org.opencontainers.image.title="Jira with educational Java premain agent" 
       org.opencontainers.image.description="Jira Software with a non-transforming Java instrumentation example"
 USER root
 RUN mkdir -p /var/agent
-COPY --from=agent-build /workspace/build/example-agent.jar /var/agent/example-agent.jar
+#COPY --from=agent-build /workspace/build/example-agent.jar /var/agent/example-agent.jar
+COPY --from=agent-build /workspace/build/atlassian-agent.jar /var/agent/example-agent.jar
 RUN chown -R jira:jira /var/agent
 ENV JVM_SUPPORT_RECOMMENDED_ARGS="-javaagent:/var/agent/example-agent.jar=application=jira"
 USER jira
