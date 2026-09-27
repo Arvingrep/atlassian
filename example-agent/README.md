@@ -58,6 +58,8 @@ docker compose --env-file .env.versions \
   up -d
 ```
 
+The active local build definitions are `jira/Dockerfile` and
+`confluence/Dockerfile`; the Compose override references those files directly.
 The resulting containers contain:
 
 ```text

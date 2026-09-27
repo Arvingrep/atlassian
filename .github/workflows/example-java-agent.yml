@@ -7,12 +7,16 @@ on:
       - "feat/**"
     paths:
       - "example-agent/**"
+      - "jira/Dockerfile"
+      - "confluence/Dockerfile"
       - "docker-compose.agent-demo.yml"
       - "scripts/check-java-agent.sh"
       - ".github/workflows/example-java-agent.yml"
   pull_request:
     paths:
       - "example-agent/**"
+      - "jira/Dockerfile"
+      - "confluence/Dockerfile"
       - "docker-compose.agent-demo.yml"
       - "scripts/check-java-agent.sh"
       - ".github/workflows/example-java-agent.yml"
@@ -77,7 +81,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: example-agent/Dockerfile.jira
+          file: jira/Dockerfile
           platforms: linux/amd64
           tags: local/jira-example-agent:9.6.0
           push: false
@@ -87,7 +91,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: example-agent/Dockerfile.confluence
+          file: confluence/Dockerfile
           platforms: linux/amd64
           tags: local/confluence-example-agent:7.19.7
           push: false

@@ -3,7 +3,7 @@ services:
     image: local/jira-example-agent:${JIRA_VERSION:-9.6.0}
     build:
       context: .
-      dockerfile: example-agent/Dockerfile.jira
+      dockerfile: jira/Dockerfile
       args:
         BASE_IMAGE: atlassian/jira-software:${JIRA_VERSION:-9.6.0}-${ATLASSIAN_JAVA_TAG:-jdk11}
 
@@ -11,6 +11,6 @@ services:
     image: local/confluence-example-agent:${CONFLUENCE_VERSION:-7.19.7}
     build:
       context: .
-      dockerfile: example-agent/Dockerfile.confluence
+      dockerfile: confluence/Dockerfile
       args:
         BASE_IMAGE: atlassian/confluence-server:${CONFLUENCE_VERSION:-7.19.7}-${ATLASSIAN_JAVA_TAG:-jdk11}
