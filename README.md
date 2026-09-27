@@ -125,6 +125,42 @@ Administration → System → Indexing → Full foreground re-index
 scripts/finalize-jira-migration.sh
 ```
 
+## Confluence 备份导入
+
+```bash
+scripts/import-confluence-migration-package.sh \
+  /tmp/confluence-migration-package.tar.gz --yes
+```
+
+脚本会：
+
+1. 停止 Confluence；
+2. 恢复 Home，保留 `attachments/` 与 `shared-home/`，排除 `index/`、`journal/`、`analytics-logs/`、`restore/`、`database/`；
+3. 由 `confluence.cfg.xml.raw` 生成新配置，改写连接串并删除 `jdbc.password.decrypter.classname`；
+4. 重建数据库并恢复 `conf70db.dump`；
+5. 属主改为 `2002:2002`；
+6. 启动并输出表、空间、内容、页面、用户和附件数量。
+
+导入后需在 `General Configuration → General` 核对 Base URL 为：
+
+```text
+https://confsys.sl-devops.com
+```
+
+数据库中的旧域名引用可用 SQL 批量替换，`bandana` 表涉及：
+
+```text
+atlassian.confluence.settings             baseUrl
+synchrony_collaborative_editor_app_base_url
+com.atlassian.plugins.custom_apps.customAppsAsJSON
+com.atlassian.oauth.consumer.ConsumerService:host.__HOST_SERVICE__
+applinks.admin.<id>.display.url / .rpc.url
+```
+
+## 许可证
+
+Jira 与 Confluence 的镜像均为官方原版，不含许可证。恢复的自带许可证若无法通过校验，应用会返回 500 或进入不可用状态，此时需要在管理界面录入有效许可证（正式或官方试用）后才能继续验收。
+
 ## 验收
 
 ```bash

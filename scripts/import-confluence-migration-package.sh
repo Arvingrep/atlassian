@@ -131,7 +131,8 @@ printf 'tables='; psql_exec "${CONFLUENCE_DB}" -Atc \
 printf 'spaces='; psql_exec "${CONFLUENCE_DB}" -Atc 'select count(*) from spaces;' 2>/dev/null || true
 printf 'content='; psql_exec "${CONFLUENCE_DB}" -Atc 'select count(*) from content;' 2>/dev/null || true
 printf 'users='; psql_exec "${CONFLUENCE_DB}" -Atc 'select count(*) from cwd_user;' 2>/dev/null || true
-printf 'attachment_files='; ls -1 "$(docker volume inspect "${CONFLUENCE_HOME_VOLUME}" --format '{{.Mountpoint}}')/attachments" 2>/dev/null | wc -l
+printf 'attachment_rows='; psql_exec "${CONFLUENCE_DB}" -Atc "select count(*) from content where contenttype='ATTACHMENT';"
+printf 'home_attachment_files='; docker run --rm --platform "${PLATFORM}" -v "${CONFLUENCE_HOME_VOLUME}:/target" "${POSTGRES_IMAGE}" sh -c 'find /target/attachments -type f 2>/dev/null | wc -l'
 
 cat <<EOF
 Confluence import completed.
