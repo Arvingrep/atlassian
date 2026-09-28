@@ -92,3 +92,14 @@ helm --kube-context orbstack -n atlassian uninstall jira confluence
 kubectl --context orbstack delete -f k8s/manifests/postgres.yaml
 kubectl --context orbstack -n atlassian delete pvc --all   # 会删数据
 ```
+
+## GitOps（ArgoCD）
+
+`k8s/argocd/` 下有三个 Application，用 sync-wave 控制顺序，用法见 `k8s/argocd/README.md`。
+
+## 踩坑记录
+
+- **chart 的 `resources` 必须嵌套**：`jira.resources` / `confluence.resources`。写在顶层会被静默忽略，Pod 会用 chart 默认值（768m/1g heap、2 CPU / 2G）。
+- **不要用 `additionalEnvironmentVariables` 覆盖 `JVM_SUPPORT_RECOMMENDED_ARGS`**：chart 自己占用该键，重复会直接 apply 失败（`duplicate entries for key`）。也正因为 chart 会覆盖镜像 ENV，用自带 `-javaagent` 的镜像时该参数不会进入 JVM 命令行。
+- **PostgreSQL 的 Service 不要用 headless（`clusterIP: None`）**：Pod 重建后 IP 变化，应用的 JDBC 连接池仍指着旧 IP，Jira 会直接报 `failed to establish a connection to your database` 并锁定自己（Startup check failed. Jira will be locked.），表现为 readiness 一直 500、StatefulSet 滚动更新卡住（旧 Pod 不 Ready，新 Pod 不会被创建）。用带 ClusterIP 的普通 Service 由 kube-proxy 转发即可。
+- **单副本 + 未就绪会卡住 helm/StatefulSet 更新**：Jira 先进入锁定状态时，`helm upgrade` 会等到 `context deadline exceeded`，需要先把旧 Pod 的 readiness 修好或直接删 Pod。

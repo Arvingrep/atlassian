@@ -35,7 +35,10 @@ metadata:
   labels:
     app: postgres
 spec:
-  clusterIP: None
+  # Keep a stable ClusterIP: with a headless Service (clusterIP: None) the DNS
+  # name resolves straight to the pod IP, so when the pod is recreated with a new
+  # IP the app's JDBC pool keeps dialling a dead address and Jira locks itself
+  # with "failed to establish a connection to your database".
   selector:
     app: postgres
   ports:
