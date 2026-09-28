@@ -126,3 +126,55 @@ orb stop && orb start      # 重启 OrbStack，compose 容器与 k8s pod 一并�
 
 复验结果（调内存后）：`jira-0 1/1 Running /status=FIRST_RUN`、`confluence-0 1/1 Running`、
 两个 pod 的 `-javaagent` 计数均为 0。
+
+## 内网入口（Gateway API）
+
+集群装的是 **Envoy Gateway v1.5.8**（提供 Gateway API 实现 + CRD），资源在 `k8s/manifests/gateway.yaml`：
+
+```text
+GatewayClass  eg           controller = gateway.envoyproxy.io/gatewayclass-controller
+Gateway       atlassian    HTTP:80, hostname *.sl-devops.com, allowedRoutes=Same
+HTTPRoute     jira         jira-k8s.sl-devops.com -> svc/jira:80
+HTTPRoute     confluence   conf-k8s.sl-devops.com -> svc/confluence:80
+```
+
+安装与部署：
+
+```bash
+helm --kube-context orbstack upgrade --install envoy-gateway \
+  oci://docker.io/envoyproxy/gateway-helm --version v1.5.8 \
+  -n envoy-gateway-system --create-namespace --wait --timeout 8m
+
+kubectl --context orbstack apply -f k8s/manifests/gateway.yaml
+kubectl --context orbstack -n atlassian get gateway,httproute
+```
+
+Gateway 会创建一个 LoadBalancer Service，OrbStack 直接分配可从 macOS 访问的 IP：
+
+```bash
+kubectl --context orbstack -n envoy-gateway-system \
+  get svc -l gateway.envoyproxy.io/owning-gateway-name=atlassian \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'
+```
+
+内网解析（手动加，需要 sudo；IP 换成上面查到的值）：
+
+```text
+192.168.139.2 jira-k8s.sl-devops.com
+192.168.139.2 conf-k8s.sl-devops.com
+```
+
+实测（绕过 hosts 直连）：
+
+```bash
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: jira-k8s.sl-devops.com' http://192.168.139.2/
+# 302 /secure/SetupMode!default.jspa
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: conf-k8s.sl-devops.com' http://192.168.139.2/
+# 302 /bootstrap/selectsetupstep.action
+```
+
+注意：
+
+- Gateway 的 LoadBalancer IP 由 OrbStack 分配，集群重建后会变，hosts 要同步更新。
+- 走 HTTP（内网），暂不配 TLS；compose 环境的 `alpha-jira` / `confsys` 域名保持不变，互不冲突。
+- Jira 现在是 `FIRST_RUN`：安装向导会把**当时访问用的域名**写成 base URL，务必用 `http://jira-k8s.sl-devops.com` 而不是 port-forward 的 localhost 打开向导。
