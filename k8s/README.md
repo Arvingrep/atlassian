@@ -129,7 +129,7 @@ orb stop && orb start      # 重启 OrbStack，compose 容器与 k8s pod 一并�
 
 ## 内网入口（Gateway API + 通配 TLS）
 
-集群装的是 **Envoy Gateway v1.5.8**（提供 Gateway API 实现 + CRD）。
+集群装的是 **Envoy Gateway v1.5.8**（提供 Gateway API 实现 + CRD）。GitOps 由 ArgoCD `atlassian-gateway` 管。
 
 ```text
 GatewayClass  eg                 controller = gateway.envoyproxy.io/gatewayclass-controller
@@ -140,7 +140,7 @@ HTTPRoute     jira               由 jira chart 创建（values 里的 gateway �
 HTTPRoute     confluence         由 confluence chart 创建
 ```
 
-Gateway 与跳转路由在 `k8s/manifests/gateway.yaml`；**应用的 HTTPRoute 交给 chart 自己创建**，
+Gateway 与跳转路由在 `k8s/manifests-gateway/gateway.yaml`（独立目录，由独立的 ArgoCD Application 管）；**应用的 HTTPRoute 交给 chart 自己创建**，
 因为设置 `gateway.hostnames` 会同时激活 chart 的 gateway 模式，给容器注入
 `ATL_TOMCAT_SCHEME=https` / `ATL_TOMCAT_SECURE=true` / `ATL_PROXY_NAME` / `ATL_PROXY_PORT=443`。
 不注入这些，Jira/Confluence 在 TLS 终止的反代后面会生成 `http://` 链接并报 base URL 不匹配。
@@ -171,7 +171,7 @@ Gateway 需要完整链才能让浏览器校验通过）。已核对 crt 与 key
 ### 3. Gateway 与路由
 
 ```bash
-kubectl --context orbstack apply -f k8s/manifests/gateway.yaml
+kubectl --context orbstack apply -f k8s/manifests-gateway/gateway.yaml
 kubectl --context orbstack -n atlassian get gateway atlassian \
   -o jsonpath='{range .status.listeners[*]}{.name}={.conditions[?(@.type=="Programmed")].status} attached={.attachedRoutes}{"\n"}{end}'
 ```
@@ -221,3 +221,29 @@ served cert: CN=*.sl-devops.com / Certum DV TLS G2 R39 CA / notAfter=Dec 11 2026
 - compose 环境的 `alpha-jira` / `confsys` 域名保持不变，与 `*-k8s` 域名互不冲突。
 - Jira/Confluence 现在是 `FIRST_RUN`：安装向导会把**当时访问用的域名**写成 base URL，
   必须用 `https://jira-k8s.sl-devops.com` 打开向导，不要用 port-forward 的 localhost。
+
+### 6. 应用侧代理变量已生效（实测）
+
+```bash
+kubectl --context orbstack -n atlassian get pod jira-0 \
+  -o jsonpath='{range .spec.containers[0].env[*]}{.name}={.value}{"\n"}{end}' | grep ATL_
+# ATL_TOMCAT_SCHEME=https / ATL_TOMCAT_SECURE=true
+# ATL_PROXY_NAME=jira-k8s.sl-devops.com / ATL_PROXY_PORT=443
+```
+
+重定向的 `Location` 是 `https://jira-k8s.sl-devops.com/...` 绝对 URL（不是 IP、不是 http），
+证明 chart 的 gateway 模式把代理信息正确传给了 Tomcat。
+
+### ArgoCD 的两个 drift 坑（都已修，别回退）
+
+1. **同一对象不能被两个 Application 同时声明**。`gateway.yaml` 里一度也写了 jira/confluence
+   的 HTTPRoute，与 chart 生成的同名，结果两边永久 `OutOfSync` 且带 `SharedResourceWarning`。
+   产品路由归 chart，Gateway/GatewayClass/跳转路由归 `atlassian-gateway`。
+2. **Gateway API 的 `group` / `kind` 必须在 Git 里写全**。省略时 API server 会补默认值
+   （`certificateRefs` 补 `group: ""` + `kind: Secret`，`parentRefs` 补
+   `gateway.networking.k8s.io/Gateway`，HTTPRoute 的 `matches` 补 `PathPrefix /`），
+   ArgoCD 会当成 drift。chart 渲染的 `backendRefs` 我们改不了，只能在 Application 里
+   `ignoreDifferences` 掉 `/spec/rules/0/backendRefs/0/{group,kind}`。
+
+最终状态：`atlassian-postgres` / `atlassian-gateway` / `atlassian-jira` / `atlassian-confluence`
+四个 Application 全部 `Synced/Healthy`，无残余 drift。
