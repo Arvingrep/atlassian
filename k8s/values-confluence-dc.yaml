@@ -1,0 +1,68 @@
+# Confluence Data Center chart (atlassian-data-center/confluence 2.0.15) - MacBook OrbStack test values
+replicaCount: 1
+
+image:
+  repository: atlassian/confluence
+  # Pin to the migrated version instead of the chart default appVersion.
+  tag: "7.19.7-jdk11"
+  pullPolicy: IfNotPresent
+
+database:
+  type: postgresql
+  url: jdbc:postgresql://postgres.atlassian.svc.cluster.local:5432/confluence
+  driver: org.postgresql.Driver
+  credentials:
+    secretName: confluence-db-credentials
+
+volumes:
+  localHome:
+    persistentVolumeClaim:
+      create: true
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 30Gi
+  sharedHome:
+    persistentVolumeClaim:
+      create: true
+      storageClassName: local-path
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20Gi
+
+confluence:
+  # NOTE: JVM heap and container resources belong to 'confluence.resources' in
+  # this chart - a top-level 'resources' block is silently ignored.
+  resources:
+    jvm:
+      maxHeap: "2g"
+      minHeap: "1g"
+      reservedCodeCache: "512m"
+    container:
+      requests:
+        cpu: "1"
+        memory: "3G"
+      limits:
+        memory: "5G"
+  # License: either enter it in the setup wizard, or create a Secret and point
+  # the chart at it (uncomment license below after creating the Secret):
+  #   kubectl -n atlassian create secret generic confluence-license \
+  #     --from-literal=license-key="$(cat /path/to/confluence.license)"
+  # license:
+  #   secretName: confluence-license
+  #   secretKey: license-key
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 90
+    periodSeconds: 10
+    failureThreshold: 180
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 90
+    periodSeconds: 10
+    failureThreshold: 30
+
+synchrony:
+  enabled: false
