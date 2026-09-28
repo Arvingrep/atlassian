@@ -1,0 +1,59 @@
+# Jira Data Center chart (atlassian-data-center/jira 2.0.15) - MacBook OrbStack test values
+replicaCount: 1
+
+image:
+  repository: atlassian/jira-software
+  # Pin to the migrated version instead of the chart default appVersion.
+  tag: "9.6.0-jdk11"
+  pullPolicy: IfNotPresent
+
+database:
+  type: postgres72
+  url: jdbc:postgresql://postgres.atlassian.svc.cluster.local:5432/jira
+  driver: org.postgresql.Driver
+  credentials:
+    secretName: jira-db-credentials
+
+volumes:
+  localHome:
+    persistentVolumeClaim:
+      create: true
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 30Gi
+  sharedHome:
+    # Single-node cluster: the chart allows ReadWriteOnce for shared-home.
+    persistentVolumeClaim:
+      create: true
+      storageClassName: local-path
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20Gi
+
+jira:
+  # NOTE: JVM heap and container resources belong to 'jira.resources' in this
+  # chart - a top-level 'resources' block is silently ignored.
+  resources:
+    jvm:
+      maxHeap: "2g"
+      minHeap: "1g"
+      reservedCodeCache: "512m"
+    container:
+      requests:
+        cpu: "1"
+        memory: "3G"
+      limits:
+        memory: "5G"
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    failureThreshold: 120
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    failureThreshold: 20
