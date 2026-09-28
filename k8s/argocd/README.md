@@ -103,3 +103,21 @@ kubectl --context mac-mini-orbstack apply -f k8s/argocd/application-postgres.yam
 
 API server 会给 `volumeClaimTemplates[].spec` 补上 `volumeMode: Filesystem`，清单里不写就会一直被判定 OutOfSync。
 在清单里显式写上 `volumeMode: Filesystem` 即可（已修）。
+
+### 5. 还有坑：StatefulSet 的 API 默认字段
+
+除了 `volumeClaimTemplates[].spec.volumeMode`，API server 还会给 StatefulSet 补上
+
+```yaml
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+```
+
+清单里不写，ArgoCD 就永远判 OutOfSync（`argocd app diff` 会显示这两个字段）。处理方式二选一：
+
+- 清单里显式写出（本仓库采用）
+- 或在 Application 上加 `ignoreDifferences` 针对 `apps/StatefulSet` 的 `/spec/persistentVolumeClaimRetentionPolicy`
+
+需要看具体差异时：`argocd app diff atlassian-postgres`（先 port-forward mini 的 argocd-server）。

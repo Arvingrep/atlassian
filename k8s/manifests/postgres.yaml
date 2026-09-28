@@ -54,6 +54,11 @@ metadata:
 spec:
   serviceName: postgres
   replicas: 1
+  # API-server defaults; pinning them keeps ArgoCD from reporting the
+  # StatefulSet as permanently OutOfSync.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   selector:
     matchLabels:
       app: postgres
