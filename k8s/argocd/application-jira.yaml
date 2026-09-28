@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atlassian-jira
+  namespace: argocd
+  annotations:
+    # Databases and secrets must exist before the app starts.
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # Upstream Data Center chart
+    - repoURL: https://atlassian.github.io/data-center-helm-charts
+      chart: jira
+      targetRevision: 2.0.15
+      helm:
+        releaseName: jira
+        valueFiles:
+          - $values/k8s/values-jira-dc.yaml
+          - $values/k8s/values-jira-ghcr.yaml
+    # This repository holds the values files
+    - repoURL: https://github.com/Arvingrep/atlassian.git
+      targetRevision: feat/k8s-argocd-deployment
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: atlassian
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

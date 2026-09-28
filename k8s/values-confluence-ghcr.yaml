@@ -1,0 +1,21 @@
+# Overlay: run the CI-built GHCR image instead of the official one.
+#
+# The image bakes in JVM_SUPPORT_RECOMMENDED_ARGS pointing at a java agent.
+# Do NOT try to blank that variable via additionalEnvironmentVariables: the
+# chart sets JVM_SUPPORT_RECOMMENDED_ARGS itself, and a second entry with the
+# same name fails the apply with
+#   "duplicate entries for key [name=\"JVM_SUPPORT_RECOMMENDED_ARGS\"]"
+# The chart value wins over the image ENV, so the agent is never loaded.
+# JAVA_TOOL_OPTIONS is blanked defensively.
+#
+# Apply after the base values file:
+#   helm upgrade confluence ... -f k8s/values-confluence-dc.yaml -f k8s/values-confluence-ghcr.yaml
+image:
+  repository: ghcr.io/arvingrep/atlassian-confluence
+  tag: "7.19.7-example-agent"
+  pullPolicy: IfNotPresent
+
+confluence:
+  additionalEnvironmentVariables:
+    - name: JAVA_TOOL_OPTIONS
+      value: ""

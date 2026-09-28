@@ -28,16 +28,21 @@ Helm     v4.2.4
 
 ```text
 k8s/
-  postgres.yaml                 集群内 PostgreSQL 14 + jira/confluence 库
-  values-jira-dc.yaml           Jira DC chart values
-  values-confluence-dc.yaml     Confluence DC chart values
+  manifests/postgres.yaml        集群内 PostgreSQL 14 + jira/confluence 库
+  values-jira-dc.yaml           Jira DC chart values（官方镜像）
+  values-jira-ghcr.yaml         overrides：改用 GHCR 镜像（CI 构建产物）
+  values-confluence-dc.yaml     Confluence DC chart values（官方镜像）
+  values-confluence-ghcr.yaml   overrides：改用 GHCR 镜像
+  argocd/                       ArgoCD Application（GitOps 方式部署）
 ```
+
+GitOps 部署见 `k8s/argocd/README.md`。
 
 ## 部署顺序
 
 ```bash
 # 1. 数据库
-kubectl --context orbstack apply -f k8s/postgres.yaml
+kubectl --context orbstack apply -f k8s/manifests/postgres.yaml
 kubectl --context orbstack -n atlassian rollout status statefulset/postgres
 
 # 2. 数据库账号 Secret（不入库）
@@ -84,6 +89,6 @@ kubectl --context orbstack -n atlassian port-forward svc/confluence 18090:80
 
 ```bash
 helm --kube-context orbstack -n atlassian uninstall jira confluence
-kubectl --context orbstack delete -f k8s/postgres.yaml
+kubectl --context orbstack delete -f k8s/manifests/postgres.yaml
 kubectl --context orbstack -n atlassian delete pvc --all   # 会删数据
 ```
