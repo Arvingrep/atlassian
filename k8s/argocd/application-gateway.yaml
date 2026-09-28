@@ -19,14 +19,9 @@ spec:
     # cluster-macbook-orbstack, server https://<macbook-magicdns>:26443)
     name: macbook-orbstack
     namespace: atlassian
-  # The TLS Secret referenced by the https listener is created by hand and is not
-  # in Git, so the Gateway's status/listener conditions are controller-owned.
-  ignoreDifferences:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      jsonPointers:
-        - /spec/listeners/0/allowedRoutes/kinds
-        - /spec/listeners/1/allowedRoutes/kinds
+  # NOTE: the TLS Secret referenced by the https listener is created by hand and
+  # is NOT in Git. After a cluster rebuild, create it before this app syncs,
+  # otherwise the https listener stays Programmed=False (InvalidCertificateRef).
   syncPolicy:
     automated:
       prune: true

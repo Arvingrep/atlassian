@@ -33,7 +33,9 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
-          - kind: Secret
+          # group/kind 写全：API server 会补默认值，不写会让 ArgoCD 永久报 drift
+          - group: ""
+            kind: Secret
             name: sl-devops-wildcard-tls
       allowedRoutes:
         namespaces:
@@ -46,13 +48,19 @@ metadata:
   namespace: atlassian
 spec:
   parentRefs:
-    - name: atlassian
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: atlassian
       sectionName: http
   hostnames:
     - jira-k8s.sl-devops.com
     - conf-k8s.sl-devops.com
   rules:
-    - filters:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
         - type: RequestRedirect
           requestRedirect:
             scheme: https

@@ -29,6 +29,14 @@ spec:
     # cluster-macbook-orbstack, server https://<macbook-tailnet-ip>:26443)
     name: macbook-orbstack
     namespace: atlassian
+  # The chart renders HTTPRoute backendRefs without group/kind; the API server
+  # defaults them to ("" , Service), which ArgoCD otherwise reports as drift.
+  ignoreDifferences:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      jsonPointers:
+        - /spec/rules/0/backendRefs/0/group
+        - /spec/rules/0/backendRefs/0/kind
   syncPolicy:
     automated:
       prune: true

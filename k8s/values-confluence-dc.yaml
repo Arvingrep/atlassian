@@ -74,5 +74,7 @@ gateway:
   hostnames:
     - conf-k8s.sl-devops.com
   parentRefs:
-    - name: atlassian
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: atlassian
       sectionName: https
