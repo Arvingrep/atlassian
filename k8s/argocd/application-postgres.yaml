@@ -18,6 +18,18 @@ spec:
     # cluster-macbook-orbstack, server https://<macbook-tailnet-ip>:26443)
     name: macbook-orbstack
     namespace: atlassian
+  # StatefulSets carry API-server defaults (podManagementPolicy, revisionHistoryLimit,
+  # probe thresholds, ...) plus an immutable volumeClaimTemplates block, which ArgoCD
+  # reports as permanent drift on an otherwise matching object.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
+        - /spec/persistentVolumeClaimRetentionPolicy
+        - /spec/revisionHistoryLimit
+        - /spec/podManagementPolicy
+        - /spec/updateStrategy
   syncPolicy:
     automated:
       prune: true
