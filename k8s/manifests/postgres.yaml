@@ -111,6 +111,9 @@ spec:
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: local-path
+        # Pin volumeMode explicitly: the API server defaults it to Filesystem, and
+        # ArgoCD otherwise reports the StatefulSet as permanently OutOfSync.
+        volumeMode: Filesystem
         resources:
           requests:
             storage: 20Gi

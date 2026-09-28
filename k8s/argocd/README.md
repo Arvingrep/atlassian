@@ -48,3 +48,58 @@ kubectl --context orbstack apply -f k8s/argocd/application-confluence.yaml
 - 用 `ServerSideApply=true`：StatefulSet 的探针、env 等字段较多，客户端 apply 容易因 `last-applied-configuration` 过大出问题。
 - Jira / Confluence 的 `additionalEnvironmentVariables` **不能**重复定义 `JVM_SUPPORT_RECOMMENDED_ARGS`（chart 已占用该键，重复会直接报 duplicate env key）。
 - 装完 ArgoCD 后如果想要「App of Apps」，再加一个 root Application 引用 `k8s/argocd/` 目录即可。
+
+## 接到 mac-mini 的 ArgoCD
+
+MacBook 的 k8s（context `orbstack`）由 **mac-mini 上跑的 ArgoCD** 管理。因为 OrbStack 的 API server 只监听 `127.0.0.1:26443`，mini 侧无法直连，需要两步：
+
+### 1. Tailscale 转发 API 端口（MacBook 上执行）
+
+```bash
+tailscale serve --bg --tcp 26443 tcp://127.0.0.1:26443
+tailscale serve status          # 确认 100.x.y.z:26443 -> 127.0.0.1:26443
+```
+
+mini 的 pod/host 都能访问 `https://<macbook-tailnet-ip>:26443`（实测返回 401 = 可达）。
+
+### 2. 在 mini 的 ArgoCD 注册集群
+
+```bash
+kubectl --context mac-mini-orbstack -n argocd apply -f cluster-macbook-orbstack.yaml   # 本地生成，不入 Git
+```
+
+集群 Secret 的要点（`argocd.argoproj.io/secret-type: cluster`）：
+
+```yaml
+stringData:
+  name: macbook-orbstack
+  server: https://<macbook-tailnet-ip>:26443
+  config: |
+    {"tlsClientConfig":{"insecure":true,"certData":"<kubeconfig client-cert>","keyData":"<kubeconfig client-key>"}}
+```
+
+- **坑**：`caData` 与 `insecure: true` 不能同时给，否则 ArgoCD 报
+  `specifying a root certificates file with the insecure flag is not allowed`，应用一直是 `Unknown/Healthy`。
+- 更"干净"的做法是把 tailnet IP 加进 API 证书 SAN（`orb config set k8s.tls_san <ip>` 后重启 OrbStack），
+  然后去掉 `insecure`，但这会再重启一次全部容器，所以本测试用 insecure。
+- 客户端证书/私钥来自 MacBook 的 kubeconfig，属于敏感信息：**只 kubectl apply，不入 Git**（已加 `.gitignore`）。
+
+### 3. Applications
+
+三个 Application 的 `destination` 用集群名：
+
+```yaml
+destination:
+  name: macbook-orbstack
+  namespace: atlassian
+```
+
+```bash
+kubectl --context mac-mini-orbstack apply -f k8s/argocd/application-postgres.yaml \
+  -f k8s/argocd/application-jira.yaml -f k8s/argocd/application-confluence.yaml
+```
+
+### 4. 另一个坑：StatefulSet 永远 OutOfSync
+
+API server 会给 `volumeClaimTemplates[].spec` 补上 `volumeMode: Filesystem`，清单里不写就会一直被判定 OutOfSync。
+在清单里显式写上 `volumeMode: Filesystem` 即可（已修）。
