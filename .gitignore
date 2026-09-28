@@ -3,3 +3,4 @@
 ! **/dockerfile
 example-agent/build/
 example-agent.jar
+k8s/argocd/.cluster-*.local.yaml

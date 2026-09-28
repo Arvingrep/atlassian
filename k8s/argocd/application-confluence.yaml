@@ -25,7 +25,9 @@ spec:
       targetRevision: feat/k8s-argocd-deployment
       ref: values
   destination:
-    server: https://kubernetes.default.svc
+    # Cluster name registered in the mac-mini ArgoCD (cluster secret
+    # cluster-macbook-orbstack, server https://<macbook-tailnet-ip>:26443)
+    name: macbook-orbstack
     namespace: atlassian
   syncPolicy:
     automated:
