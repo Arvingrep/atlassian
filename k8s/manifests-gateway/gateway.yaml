@@ -57,43 +57,7 @@ spec:
           requestRedirect:
             scheme: https
             statusCode: 301
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: jira
-  namespace: atlassian
-spec:
-  parentRefs:
-    - name: atlassian
-      sectionName: https
-  hostnames:
-    - jira-k8s.sl-devops.com
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-      backendRefs:
-        - name: jira
-          port: 80
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: confluence
-  namespace: atlassian
-spec:
-  parentRefs:
-    - name: atlassian
-      sectionName: https
-  hostnames:
-    - conf-k8s.sl-devops.com
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-      backendRefs:
-        - name: confluence
-          port: 80
+# 注意：jira / confluence 的 HTTPRoute 由各自的 Helm chart 创建
+# （k8s/values-*-dc.yaml 的 gateway 段），不要在这里重复定义，
+# 否则两个 ArgoCD Application 同时声明同一对象，双方永久 OutOfSync
+# 并带 SharedResourceWarning。
