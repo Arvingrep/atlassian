@@ -158,3 +158,5 @@ server              : https://100.75.240.26:26443
 secret              : argocd/cluster-macbook-orbstack
 forward             : tailscale serve --bg --tcp 26443 tcp://127.0.0.1:26443
 note                : tailnet IP 变化时需更新 secret 里的 server（或用 MagicDNS 名称）
+
+**集群注册最终值**：server = `https://arvinmacbook-pro-2.tail0945af.ts.net:26443`（MagicDNS 名称，已替换 tailnet IP）。
