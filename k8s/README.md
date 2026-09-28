@@ -103,3 +103,26 @@ kubectl --context orbstack -n atlassian delete pvc --all   # 会删数据
 - **不要用 `additionalEnvironmentVariables` 覆盖 `JVM_SUPPORT_RECOMMENDED_ARGS`**：chart 自己占用该键，重复会直接 apply 失败（`duplicate entries for key`）。也正因为 chart 会覆盖镜像 ENV，用自带 `-javaagent` 的镜像时该参数不会进入 JVM 命令行。
 - **PostgreSQL 的 Service 不要用 headless（`clusterIP: None`）**：Pod 重建后 IP 变化，应用的 JDBC 连接池仍指着旧 IP，Jira 会直接报 `failed to establish a connection to your database` 并锁定自己（Startup check failed. Jira will be locked.），表现为 readiness 一直 500、StatefulSet 滚动更新卡住（旧 Pod 不 Ready，新 Pod 不会被创建）。用带 ClusterIP 的普通 Service 由 kube-proxy 转发即可。
 - **单副本 + 未就绪会卡住 helm/StatefulSet 更新**：Jira 先进入锁定状态时，`helm upgrade` 会等到 `context deadline exceeded`，需要先把旧 Pod 的 readiness 修好或直接删 Pod。
+
+## OrbStack VM 内存（关键前置）
+
+k8s 的 pod 和 compose 的容器跑在**同一个** OrbStack Linux VM 里，VM 内存默认 `memory_mib: 16384`（16 GiB）。
+两个 Data Center 应用 + PostgreSQL 一起跑会打满这个上限，症状很有迷惑性：
+
+```text
+postgres-0 lastTerminated = OOMKilled (exit 137)，占用只有 24 MiB / 限额 2 GiB
+jira-0     Startup check failed. Jira will be locked.（启动时连不上库，只检查一次）
+/status    500 → readiness 失败 → 单副本 StatefulSet 滚动更新卡住 → helm upgrade 超时
+VM 内 /proc/meminfo: MemFree 125 MB, MemAvailable 682 MB
+```
+
+macOS 侧可能完全正常（48 GB、内存压力绿色），瓶颈只在 VM 上限。调到 32 GiB 后：
+
+```bash
+orb config set memory_mib 32768
+orb stop && orb start      # 重启 OrbStack，compose 容器与 k8s pod 一并重启（数据卷不受影响）
+# 重启后 VM 内 MemAvailable 从 682 MB 变为 ~20 GiB
+```
+
+复验结果（调内存后）：`jira-0 1/1 Running /status=FIRST_RUN`、`confluence-0 1/1 Running`、
+两个 pod 的 `-javaagent` 计数均为 0。
