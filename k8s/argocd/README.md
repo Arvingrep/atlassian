@@ -121,3 +121,40 @@ spec:
 - 或在 Application 上加 `ignoreDifferences` 针对 `apps/StatefulSet` 的 `/spec/persistentVolumeClaimRetentionPolicy`
 
 需要看具体差异时：`argocd app diff atlassian-postgres`（先 port-forward mini 的 argocd-server）。
+
+### 持久化（重启后仍然可用）
+
+两件事需要保证，脚本已放在 `k8s/scripts/`：
+
+1. **Tailscale 转发**：`tailscale serve --bg` 的配置由 tailscaled 保存，重启后一般会自动恢复；
+   为防 OrbStack 比 tailscaled 晚起，可用脚本重新断言一次（幂等）：
+
+```bash
+k8s/scripts/tailscale-serve-k8s-api.sh        # 已 chmod +x，可重复执行
+# 可选：登录时自动执行
+sed "s#__SCRIPT__#$PWD/k8s/scripts/tailscale-serve-k8s-api.sh#" \
+  k8s/scripts/com.atlassian-k8s-api-forward.plist \
+  > ~/Library/LaunchAgents/com.atlassian-k8s-api-forward.plist
+launchctl load ~/Library/LaunchAgents/com.atlassian-k8s-api-forward.plist
+```
+
+2. **OrbStack 开机自启**：否则重启后 `127.0.0.1:26443` 根本不存在。
+
+```bash
+orb config set app.start_at_login true     # 已设置
+```
+
+验证链路（mini → MacBook API 应返回 401，说明可达且需要认证）：
+
+```bash
+ssh arvin@100.80.244.45 'curl -sS -o /dev/null -w "%{http_code}\n" -k --max-time 10 https://<macbook-tailnet-ip>:26443/version'
+```
+
+### 集群注册信息（本地记录，不入 Git）
+
+```text
+ArgoCD cluster name : macbook-orbstack
+server              : https://100.75.240.26:26443
+secret              : argocd/cluster-macbook-orbstack
+forward             : tailscale serve --bg --tcp 26443 tcp://127.0.0.1:26443
+note                : tailnet IP 变化时需更新 secret 里的 server（或用 MagicDNS 名称）

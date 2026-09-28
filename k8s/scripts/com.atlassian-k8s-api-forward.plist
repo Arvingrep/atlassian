@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Optional LaunchAgent: re-assert the Tailscale TCP forward for the OrbStack k8s API
+  at login. Tailscale normally keeps the serve config across restarts, so this is a
+  belt-and-braces guard for the case where OrbStack starts after tailscaled.
+
+  Install:
+    sed "s#__SCRIPT__#$PWD/k8s/scripts/tailscale-serve-k8s-api.sh#" \
+      k8s/scripts/com.atlassian-k8s-api-forward.plist \
+      > ~/Library/LaunchAgents/com.atlassian-k8s-api-forward.plist
+    launchctl load ~/Library/LaunchAgents/com.atlassian-k8s-api-forward.plist
+  Remove:
+    launchctl unload ~/Library/LaunchAgents/com.atlassian-k8s-api-forward.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.atlassian-k8s-api-forward</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__SCRIPT__</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/atlassian-k8s-api-forward.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/atlassian-k8s-api-forward.err</string>
+</dict>
+</plist>
