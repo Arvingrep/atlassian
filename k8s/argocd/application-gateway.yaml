@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atlassian-gateway
+  namespace: argocd
+  annotations:
+    # The Gateway must exist before the product charts' HTTPRoutes attach to it.
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Arvingrep/atlassian.git
+    targetRevision: feat/k8s-argocd-deployment
+    path: k8s/manifests-gateway
+  destination:
+    # Cluster name registered in the mac-mini ArgoCD (cluster secret
+    # cluster-macbook-orbstack, server https://<macbook-magicdns>:26443)
+    name: macbook-orbstack
+    namespace: atlassian
+  # The TLS Secret referenced by the https listener is created by hand and is not
+  # in Git, so the Gateway's status/listener conditions are controller-owned.
+  ignoreDifferences:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      jsonPointers:
+        - /spec/listeners/0/allowedRoutes/kinds
+        - /spec/listeners/1/allowedRoutes/kinds
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
