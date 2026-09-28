@@ -57,3 +57,16 @@ jira:
     initialDelaySeconds: 60
     periodSeconds: 10
     failureThreshold: 20
+
+# 内网入口：由 chart 创建 HTTPRoute 挂到 atlassian Gateway 的 https listener。
+# 设置 hostnames 同时激活 chart 的 gateway 模式，使容器拿到
+# ATL_TOMCAT_SCHEME=https / ATL_TOMCAT_SECURE=true / ATL_PROXY_NAME / ATL_PROXY_PORT，
+# 否则 Jira 在 TLS 终止的反代后面会生成 http:// 链接并报 base URL 不匹配。
+gateway:
+  create: true
+  https: true
+  hostnames:
+    - jira-k8s.sl-devops.com
+  parentRefs:
+    - name: atlassian
+      sectionName: https

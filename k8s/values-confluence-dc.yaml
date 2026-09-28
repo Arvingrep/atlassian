@@ -66,3 +66,13 @@ confluence:
 
 synchrony:
   enabled: false
+
+# 内网入口：同 Jira，见 k8s/README.md「内网入口（Gateway API）」
+gateway:
+  create: true
+  https: true
+  hostnames:
+    - conf-k8s.sl-devops.com
+  parentRefs:
+    - name: atlassian
+      sectionName: https

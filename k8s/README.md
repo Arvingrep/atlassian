@@ -127,29 +127,56 @@ orb stop && orb start      # 重启 OrbStack，compose 容器与 k8s pod 一并�
 复验结果（调内存后）：`jira-0 1/1 Running /status=FIRST_RUN`、`confluence-0 1/1 Running`、
 两个 pod 的 `-javaagent` 计数均为 0。
 
-## 内网入口（Gateway API）
+## 内网入口（Gateway API + 通配 TLS）
 
-集群装的是 **Envoy Gateway v1.5.8**（提供 Gateway API 实现 + CRD），资源在 `k8s/manifests/gateway.yaml`：
+集群装的是 **Envoy Gateway v1.5.8**（提供 Gateway API 实现 + CRD）。
 
 ```text
-GatewayClass  eg           controller = gateway.envoyproxy.io/gatewayclass-controller
-Gateway       atlassian    HTTP:80, hostname *.sl-devops.com, allowedRoutes=Same
-HTTPRoute     jira         jira-k8s.sl-devops.com -> svc/jira:80
-HTTPRoute     confluence   conf-k8s.sl-devops.com -> svc/confluence:80
+GatewayClass  eg                 controller = gateway.envoyproxy.io/gatewayclass-controller
+Gateway       atlassian          listener http  :80  -> 只做 301 跳 HTTPS
+                                 listener https :443 -> TLS Terminate，通配证书 *.sl-devops.com
+HTTPRoute     https-redirect     两个域名的 HTTP 请求 301 到 https（k8s/manifests/gateway.yaml）
+HTTPRoute     jira               由 jira chart 创建（values 里的 gateway 段）
+HTTPRoute     confluence         由 confluence chart 创建
 ```
 
-安装与部署：
+Gateway 与跳转路由在 `k8s/manifests/gateway.yaml`；**应用的 HTTPRoute 交给 chart 自己创建**，
+因为设置 `gateway.hostnames` 会同时激活 chart 的 gateway 模式，给容器注入
+`ATL_TOMCAT_SCHEME=https` / `ATL_TOMCAT_SECURE=true` / `ATL_PROXY_NAME` / `ATL_PROXY_PORT=443`。
+不注入这些，Jira/Confluence 在 TLS 终止的反代后面会生成 `http://` 链接并报 base URL 不匹配。
+
+### 1. 装 Gateway API 实现
 
 ```bash
 helm --kube-context orbstack upgrade --install envoy-gateway \
   oci://docker.io/envoyproxy/gateway-helm --version v1.5.8 \
   -n envoy-gateway-system --create-namespace --wait --timeout 8m
-
-kubectl --context orbstack apply -f k8s/manifests/gateway.yaml
-kubectl --context orbstack -n atlassian get gateway,httproute
 ```
 
-Gateway 会创建一个 LoadBalancer Service，OrbStack 直接分配可从 macOS 访问的 IP：
+chart 自带 Gateway API CRD 与 certgen Job，不需要单独 apply upstream CRD。
+
+### 2. TLS Secret（复用 compose 的 Certum 通配证书，不入 Git）
+
+```bash
+kubectl --context orbstack -n atlassian create secret tls sl-devops-wildcard-tls \
+  --cert=nginx/ssl/sl-devops.com.crt \
+  --key=nginx/ssl/sl-devops.com.key \
+  --dry-run=client -o yaml | kubectl --context orbstack apply -f -
+```
+
+证书事实：`CN=*.sl-devops.com`，SAN `*.sl-devops.com, sl-devops.com`，
+签发 `Certum DV TLS G2 R39 CA`，有效期至 **2026-12-11**，文件里含 4 段证书（叶子 + 中间链，
+Gateway 需要完整链才能让浏览器校验通过）。已核对 crt 与 key 的公钥 md5 一致。
+
+### 3. Gateway 与路由
+
+```bash
+kubectl --context orbstack apply -f k8s/manifests/gateway.yaml
+kubectl --context orbstack -n atlassian get gateway atlassian \
+  -o jsonpath='{range .status.listeners[*]}{.name}={.conditions[?(@.type=="Programmed")].status} attached={.attachedRoutes}{"\n"}{end}'
+```
+
+Gateway 会创建 LoadBalancer Service，OrbStack 直接分配一个 macOS 可直连的 IP：
 
 ```bash
 kubectl --context orbstack -n envoy-gateway-system \
@@ -157,24 +184,40 @@ kubectl --context orbstack -n envoy-gateway-system \
   -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'
 ```
 
-内网解析（手动加，需要 sudo；IP 换成上面查到的值）：
-
-```text
-192.168.139.2 jira-k8s.sl-devops.com
-192.168.139.2 conf-k8s.sl-devops.com
-```
-
-实测（绕过 hosts 直连）：
+### 4. 内网解析（手动，需要 sudo；IP 换成上面查到的值）
 
 ```bash
-curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: jira-k8s.sl-devops.com' http://192.168.139.2/
-# 302 /secure/SetupMode!default.jspa
-curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: conf-k8s.sl-devops.com' http://192.168.139.2/
-# 302 /bootstrap/selectsetupstep.action
+sudo sh -c 'printf "192.168.139.2 jira-k8s.sl-devops.com\n192.168.139.2 conf-k8s.sl-devops.com\n" >> /etc/hosts'
 ```
 
-注意：
+### 5. 实测（绕过 hosts，用 --resolve 直连）
+
+```bash
+IP=192.168.139.2
+for h in jira-k8s.sl-devops.com conf-k8s.sl-devops.com; do
+  curl -s -o /dev/null -w "$h http  %{http_code} -> %{redirect_url}\n" -H "Host: $h" http://$IP/
+  curl -s -o /dev/null -w "$h https %{http_code} ssl_verify=%{ssl_verify_result}\n" --resolve "$h:443:$IP" "https://$h/"
+done
+echo | openssl s_client -connect $IP:443 -servername jira-k8s.sl-devops.com 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
+```
+
+结果：
+
+```text
+jira-k8s  http  301 -> https://jira-k8s.sl-devops.com/
+jira-k8s  https 302 -> /secure/SetupMode!default.jspa       ssl_verify=0（公网 CA 直接校验通过）
+conf-k8s  http  301 -> https://conf-k8s.sl-devops.com/
+conf-k8s  https 302 -> /bootstrap/selectsetupstep.action    ssl_verify=0
+served cert: CN=*.sl-devops.com / Certum DV TLS G2 R39 CA / notAfter=Dec 11 2026
+```
+
+### 注意
 
 - Gateway 的 LoadBalancer IP 由 OrbStack 分配，集群重建后会变，hosts 要同步更新。
-- 走 HTTP（内网），暂不配 TLS；compose 环境的 `alpha-jira` / `confsys` 域名保持不变，互不冲突。
-- Jira 现在是 `FIRST_RUN`：安装向导会把**当时访问用的域名**写成 base URL，务必用 `http://jira-k8s.sl-devops.com` 而不是 port-forward 的 localhost 打开向导。
+- **TLS Secret 不入 Git**，ArgoCD 只管 Gateway/HTTPRoute；集群重建后要先手动建 Secret，
+  否则 https listener 会 `Programmed=False`（`InvalidCertificateRef`）。
+- 证书 2026-12-11 到期，续期时同一份文件既要更新 compose 的 `nginx/ssl/`，也要重建这个 Secret。
+- compose 环境的 `alpha-jira` / `confsys` 域名保持不变，与 `*-k8s` 域名互不冲突。
+- Jira/Confluence 现在是 `FIRST_RUN`：安装向导会把**当时访问用的域名**写成 base URL，
+  必须用 `https://jira-k8s.sl-devops.com` 打开向导，不要用 port-forward 的 localhost。
